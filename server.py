@@ -10,6 +10,12 @@ Features:
 - Mobile PWA serving with Manifest & Service Worker.
 """
 
+# Unpack embedded templates and static assets automatically if running on cloud without subfolders
+try:
+    import assets_bundle
+except ImportError:
+    pass
+
 from flask import Flask, request, jsonify, render_template, Response, send_from_directory, redirect, make_response
 import sqlite3
 import json
