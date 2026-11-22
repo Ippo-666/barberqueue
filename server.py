@@ -1638,23 +1638,113 @@ def freelance_logout():
 @app.route("/api/salon/login", methods=["POST"])
 def salon_login():
     data = request.json or {}
-    salon_id = data.get("salon_id", "").strip()
+    salon_id = (data.get("salon_id") or "").strip()
+    phone = (data.get("phone") or "").strip()
     pin_code = str(data.get("pin_code") or "").strip()
 
     conn = get_db_connection()
-    salon = conn.execute("SELECT * FROM salons WHERE id = ?", (salon_id,)).fetchone()
+    salon = None
+    if phone:
+        clean_phone = phone.replace(" ", "").replace("-", "")
+        salon = conn.execute("SELECT * FROM salons WHERE phone = ? OR phone LIKE ?", 
+                             (clean_phone, f"%{clean_phone[-9:]}")).fetchone()
+    if not salon and salon_id:
+        salon = conn.execute("SELECT * FROM salons WHERE id = ?", (salon_id,)).fetchone()
+
     if not salon:
         conn.close()
-        return jsonify({"error": "الصالون غير موجود"}), 404
+        return jsonify({"error": "الصالون غير مسجل. يرجى التحقق من رقم الهاتف أو تسجيل صالون جديد."}), 404
 
-    expected_pin = salon["pin_code"] or "1234"
+    expected_pin = str(salon["pin_code"] or "1234")
     if pin_code and pin_code != expected_pin:
         conn.close()
         return jsonify({"error": "رمز PIN للصالون غير صحيح. الرمز الافتراضي: 1234"}), 401
 
+    sid = salon["id"]
     conn.close()
-    resp = jsonify({"success": True, "redirect": f"/caisse/{salon_id}"})
+    resp = jsonify({
+        "success": True, 
+        "redirect": f"/barber/{sid}",
+        "salon_id": sid,
+        "salon_name": salon["name"],
+        "message": f"مرحباً بك مجدداً في {salon['name']}!"
+    })
+    resp.set_cookie("salon_auth_token", f"salon_{sid}", max_age=30*86400, httponly=True)
+    resp.set_cookie("barber_last_salon", sid, max_age=30*86400)
+    return resp
+
+
+@app.route("/api/salon/register", methods=["POST"])
+def salon_register():
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+    barber_name = (data.get("barber_name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    wilaya = (data.get("wilaya") or "").strip()
+    commune = (data.get("commune") or "").strip()
+    pin_code = str(data.get("pin_code") or "1234").strip()
+    chairs_count = int(data.get("chairs_count") or 1)
+
+    if not name:
+        return jsonify({"error": "يرجى كتابة اسم الصالون"}), 400
+    if not barber_name:
+        return jsonify({"error": "يرجى كتابة اسم صاحب الصالون أو الحلاق المسؤول"}), 400
+    if not phone or len(phone) < 9:
+        return jsonify({"error": "يرجى إدخال رقم هاتف صحيح (05/06/07)"}), 400
+    if not wilaya:
+        return jsonify({"error": "يرجى اختيار الولاية"}), 400
+
+    conn = get_db_connection()
+    clean_phone = phone.replace(" ", "").replace("-", "")
+    existing = conn.execute("SELECT id, name FROM salons WHERE phone = ?", (clean_phone,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": f"رقم الهاتف {phone} مسجل مسبقاً لـ '{existing['name']}'. يرجى تسجيل الدخول مباشرة."}), 400
+
+    import random, string, time
+    clean_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    salon_id = f"salon_{int(time.time()) % 10000}_{clean_suffix}"
+
+    conn.execute("""
+        INSERT INTO salons (id, name, barber_name, phone, wilaya, commune, status, pin_code, is_eid_mode, active_chair_id)
+        VALUES (?, ?, ?, ?, ?, ?, 'open', ?, 0, 1)
+    """, (salon_id, name, barber_name, clean_phone, wilaya, commune or "وسط المدينة", pin_code or "1234"))
+
+    # Add starter chairs
+    conn.execute("""
+        INSERT INTO salon_chairs (salon_id, chair_index, barber_name, status, commission_rate)
+        VALUES (?, 1, ?, 'active', 50.0)
+    """, (salon_id, barber_name))
+    if chairs_count >= 2:
+        for c in range(2, chairs_count + 1):
+            conn.execute("""
+                INSERT INTO salon_chairs (salon_id, chair_index, barber_name, status, commission_rate)
+                VALUES (?, ?, ?, 'active', 50.0)
+            """, (salon_id, c, f"حلاق كرسي {c}"))
+
+    # Add starter services
+    starter_services = [
+        (f"srv_{salon_id}_1", salon_id, "قص شعر كلاسيكي / عصري", 25, 500.0, "✂️", 1),
+        (f"srv_{salon_id}_2", salon_id, "تحديد ورعاية اللحية بالبخار", 15, 400.0, "🧔", 1),
+        (f"srv_{salon_id}_3", salon_id, "باقة VIP شاملة (شعر + لحية + سشوار)", 45, 1200.0, "👑", 1),
+    ]
+    for srv in starter_services:
+        conn.execute("""
+            INSERT INTO services (id, salon_id, name, duration_mins, price, icon, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, srv)
+
+    conn.commit()
+    conn.close()
+
+    resp = jsonify({
+        "success": True,
+        "salon_id": salon_id,
+        "redirect": f"/barber/{salon_id}",
+        "message": f"🎉 مبروك! تم تسجيل صالون '{name}' بنجاح!"
+    })
     resp.set_cookie("salon_auth_token", f"salon_{salon_id}", max_age=30*86400, httponly=True)
+    resp.set_cookie("barber_last_salon", salon_id, max_age=30*86400)
     return resp
 
 
