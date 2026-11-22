@@ -1,0 +1,315 @@
+name: Build BarberQueue APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Create BarberQueue Mobile App
+        run: |
+          set -e
+          echo "=== 1. Creating Flutter App ==="
+          flutter create barber_app --org com.barberqueue.dz --platforms android
+          cd barber_app
+
+          echo "=== 2. Adding Dependencies ==="
+          flutter pub add webview_flutter webview_flutter_android url_launcher shared_preferences
+
+          echo "=== 3. Configuring Android Permissions & HTTP Support ==="
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.CAMERA"/>' "$MANIFEST"
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
+
+          echo "=== 4. Writing lib/main.dart ==="
+          cat << 'EOF' > lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF0B0F19),
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+  runApp(const BarberQueueApp());
+}
+
+class BarberQueueApp extends StatelessWidget {
+  const BarberQueueApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'BarberQueue',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0B0F19),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFF59E0B),
+          surface: Color(0xFF1E293B),
+        ),
+      ),
+      home: const MainWebViewScreen(),
+    );
+  }
+}
+
+class MainWebViewScreen extends StatefulWidget {
+  const MainWebViewScreen({super.key});
+
+  @override
+  State<MainWebViewScreen> createState() => _MainWebViewScreenState();
+}
+
+class _MainWebViewScreenState extends State<MainWebViewScreen> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+  String _currentUrl = 'http://172.20.10.2:5000/portal';
+  final TextEditingController _urlEditController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _initAndLoad();
+  }
+
+  Future<void> _initAndLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString('server_url');
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      _currentUrl = savedUrl;
+    }
+    _urlEditController.text = _currentUrl;
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF0B0F19))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+              _hasError = false;
+            });
+          },
+          onPageFinished: (String url) {
+            setState(() {
+              _isLoading = false;
+            });
+          },
+          onWebResourceError: (WebResourceError error) {
+            if (error.isForMainFrame ?? true) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+            }
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            final uri = Uri.parse(request.url);
+            if (uri.scheme == 'tel' || uri.scheme == 'whatsapp' || request.url.contains('wa.me')) {
+              launchUrl(uri, mode: LaunchMode.externalApplication);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
+
+    if (_controller.platform is AndroidWebViewController) {
+      AndroidWebViewController.enableDebugging(true);
+      (_controller.platform as AndroidWebViewController).setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    _loadCurrentUrl();
+  }
+
+  void _loadCurrentUrl() {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+    _controller.loadRequest(Uri.parse(_currentUrl));
+  }
+
+  Future<void> _saveAndConnect(String newUrl) async {
+    String formattedUrl = newUrl.trim();
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+      formattedUrl = 'http://$formattedUrl';
+    }
+    if (!formattedUrl.contains('/portal') && !formattedUrl.contains('/admin') && !formattedUrl.contains('/login')) {
+      formattedUrl = '$formattedUrl/portal';
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_url', formattedUrl);
+
+    setState(() {
+      _currentUrl = formattedUrl;
+      _urlEditController.text = formattedUrl;
+    });
+
+    _loadCurrentUrl();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        if (!_hasError && await _controller.canGoBack()) {
+          await _controller.goBack();
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0B0F19),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              if (!_hasError)
+                WebViewWidget(controller: _controller),
+              if (_isLoading)
+                const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
+                  ),
+                ),
+              if (_hasError)
+                _buildErrorScreen(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorScreen() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Container(
+          padding: const EdgeInsets.all(24.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('💈', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 12),
+              const Text(
+                'دورك - BarberQueue',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'تعذر الاتصال بالسيرفر المحلي للحاسوب',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _urlEditController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'عنوان السيرفر (IP)',
+                  labelStyle: const TextStyle(color: Color(0xFFF59E0B)),
+                  hintText: 'http://172.20.10.2:5000/portal',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF0B0F19),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: const Color(0xFF0B0F19),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => _saveAndConnect(_urlEditController.text),
+                      child: const Text('اتصال وتحديث', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+EOF
+
+          echo "=== 5. Building Release APK ==="
+          flutter build apk --release
+
+          echo "=== 6. Copying APK ==="
+          cp build/app/outputs/flutter-apk/app-release.apk ../BarberQueue.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BarberQueue-APK
+          path: BarberQueue.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v1.0.0-${{ github.run_number }}" BarberQueue.apk \
+            --title "BarberQueue Android App" \
+            --notes "تطبيق دورك (BarberQueue DZ) بصيغة APK جاهز للتثبيت المباشر على أندرويد." || true
