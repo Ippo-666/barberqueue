@@ -1712,15 +1712,15 @@ def salon_register():
 
     # Add starter chairs
     conn.execute("""
-        INSERT INTO salon_chairs (salon_id, chair_index, barber_name, status, commission_rate)
-        VALUES (?, 1, ?, 'active', 50.0)
-    """, (salon_id, barber_name))
+        INSERT INTO salon_chairs (id, salon_id, chair_number, barber_name, is_active, commission_rate)
+        VALUES (?, ?, 1, ?, 1, 50.0)
+    """, (f"chair_{salon_id}_1", salon_id, barber_name))
     if chairs_count >= 2:
         for c in range(2, chairs_count + 1):
             conn.execute("""
-                INSERT INTO salon_chairs (salon_id, chair_index, barber_name, status, commission_rate)
-                VALUES (?, ?, ?, 'active', 50.0)
-            """, (salon_id, c, f"حلاق كرسي {c}"))
+                INSERT INTO salon_chairs (id, salon_id, chair_number, barber_name, is_active, commission_rate)
+                VALUES (?, ?, ?, ?, 1, 50.0)
+            """, (f"chair_{salon_id}_{c}", salon_id, c, f"حلاق كرسي {c}"))
 
     # Add starter services
     starter_services = [
@@ -1730,7 +1730,7 @@ def salon_register():
     ]
     for srv in starter_services:
         conn.execute("""
-            INSERT INTO services (id, salon_id, name, duration_mins, price, icon, is_active)
+            INSERT INTO services (id, salon_id, name, duration_minutes, price, icon, is_active)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, srv)
 
