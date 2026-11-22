@@ -44,9 +44,16 @@ jobs:
           if [ -f "android/build.gradle" ]; then
             sed -i -E 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle || true
           fi
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i -E 's/minSdkVersion = flutter\.minSdkVersion/minSdkVersion = 21/' android/app/build.gradle || true
+            sed -i -E 's/minSdkVersion [0-9]+/minSdkVersion 21/' android/app/build.gradle || true
+            sed -i -E 's/minSdk = flutter\.minSdkVersion/minSdk = 21/' android/app/build.gradle || true
+            sed -i -E 's/minSdk [0-9]+/minSdk 21/' android/app/build.gradle || true
+          fi
 
           echo "=== 3. Adding Dependencies ==="
-          flutter pub add webview_flutter webview_flutter_android url_launcher permission_handler connectivity_plus flutter_localizations:any
+          flutter pub add webview_flutter webview_flutter_android url_launcher permission_handler connectivity_plus
+          flutter pub add flutter_localizations --sdk=flutter
 
           echo "=== 4. Configuring Android Permissions & Intent Queries ==="
           MANIFEST="android/app/src/main/AndroidManifest.xml"
