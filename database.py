@@ -25,7 +25,13 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "barber_queue.db")
 # =====================================================================
 
 class RowWrapper(dict):
-    """Drop-in replacement for sqlite3.Row supporting both key and integer index access."""
+    """
+    Drop-in replacement for sqlite3.Row in PostgreSQL.
+    Provides dual access:
+    1. By column name: row['id'], row['customer_name'] (via RealDictCursor dict keys)
+    2. By integer index: row[0], row[1] (via tuple index)
+    3. Dict methods: row.get('key'), row.keys(), row.items(), dict(row)
+    """
     def __init__(self, data_dict, tuple_data):
         super().__init__(data_dict)
         self._tuple = tuple_data
@@ -36,13 +42,30 @@ class RowWrapper(dict):
         return super().__getitem__(item)
 
 
+TABLES_WITH_ID = {
+    'salons', 'salon_chairs', 'services', 'queue_tickets', 'products',
+    'wholesale_orders', 'daily_settlements', 'salon_expenses', 'salon_reviews',
+    'groom_appointments', 'freelance_barbers', 'home_service_requests',
+    'freelancer_wallet_recharges'
+}
+
+
 def sqlite_to_pg_query(query: str) -> str:
-    """Translates SQLite dialect (placeholders, conflict clauses) to standard PostgreSQL."""
+    """Translates SQLite dialect (placeholders, conflict clauses, types, DDL) to standard PostgreSQL."""
     q = query.strip()
+
+    # 1. DDL Compatibility: INTEGER PRIMARY KEY AUTOINCREMENT -> SERIAL PRIMARY KEY
+    q = re.sub(r'\bINTEGER\s+PRIMARY\s+KEY\s+AUTO_?INCREMENT\b', 'SERIAL PRIMARY KEY', q, flags=re.IGNORECASE)
+
+    # 2. DDL Compatibility: ALTER TABLE ... ADD COLUMN -> ADD COLUMN IF NOT EXISTS
+    q = re.sub(r'\bALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS\b)', r'ALTER TABLE \1 ADD COLUMN IF NOT EXISTS ', q, flags=re.IGNORECASE)
+
+    # 3. Conflict resolution: INSERT OR IGNORE -> ON CONFLICT DO NOTHING
     if re.search(r'\bINSERT\s+OR\s+IGNORE\s+INTO\b', q, re.IGNORECASE):
         q = re.sub(r'\bINSERT\s+OR\s+IGNORE\s+INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
         if 'ON CONFLICT' not in q.upper():
             q = q.rstrip('; ') + ' ON CONFLICT DO NOTHING;'
+    # 4. Conflict resolution: INSERT OR REPLACE
     elif 'admin_settings' in q and re.search(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', q, re.IGNORECASE):
         q = re.sub(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
         if 'ON CONFLICT' not in q.upper():
@@ -50,45 +73,135 @@ def sqlite_to_pg_query(query: str) -> str:
     elif 'daily_settlements' in q and re.search(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', q, re.IGNORECASE):
         q = re.sub(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
         if 'ON CONFLICT' not in q.upper():
-            q = q.rstrip('; ') + ' ON CONFLICT (id) DO UPDATE SET total_clients = EXCLUDED.total_clients, gross_services_revenue = EXCLUDED.gross_services_revenue;'
+            q = q.rstrip('; ') + ' ON CONFLICT (id) DO UPDATE SET total_clients = EXCLUDED.total_clients, app_clients = EXCLUDED.app_clients, walkin_clients = EXCLUDED.walkin_clients, gross_services_revenue = EXCLUDED.gross_services_revenue, products_sold_count = EXCLUDED.products_sold_count, products_sold_revenue = EXCLUDED.products_sold_revenue, barber_product_commission = EXCLUDED.barber_product_commission, total_barber_take_home = EXCLUDED.total_barber_take_home, no_show_strikes = EXCLUDED.no_show_strikes;'
     elif 'services' in q and re.search(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', q, re.IGNORECASE):
         q = re.sub(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
         if 'ON CONFLICT' not in q.upper():
-            q = q.rstrip('; ') + ' ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, price = EXCLUDED.price;'
+            q = q.rstrip('; ') + ' ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, price = EXCLUDED.price, duration_minutes = EXCLUDED.duration_minutes, icon = EXCLUDED.icon, is_active = EXCLUDED.is_active;'
     elif re.search(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', q, re.IGNORECASE):
         q = re.sub(r'\bINSERT\s+OR\s+REPLACE\s+INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
         if 'ON CONFLICT' not in q.upper():
             q = q.rstrip('; ') + ' ON CONFLICT (id) DO NOTHING;'
 
-    # Replace ? with %s outside single quotes
+    # 5. Replace ? with %s strictly outside single and double quotes
     parts = []
-    in_q = False
-    for ch in q:
-        if ch == "'":
-            in_q = not in_q
+    in_single_q = False
+    in_double_q = False
+    i = 0
+    n = len(q)
+    while i < n:
+        ch = q[i]
+        if ch == "'" and not in_double_q:
+            if in_single_q and i + 1 < n and q[i + 1] == "'":
+                parts.append("''")
+                i += 2
+                continue
+            in_single_q = not in_single_q
             parts.append(ch)
-        elif ch == '?' and not in_q:
+        elif ch == '"' and not in_single_q:
+            in_double_q = not in_double_q
+            parts.append(ch)
+        elif ch == '?' and not in_single_q and not in_double_q:
             parts.append('%s')
         else:
             parts.append(ch)
+        i += 1
     return ''.join(parts)
 
 
 class PostgresCursorWrapper:
-    def __init__(self, cursor):
+    def __init__(self, cursor, raw_conn=None):
         self._cursor = cursor
+        self._conn = raw_conn
+        self._lastrowid = None
+
+    @property
+    def lastrowid(self):
+        return self._lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    @property
+    def description(self):
+        return self._cursor.description
 
     def execute(self, query, params=None):
         q = query.strip()
+
+        # Intercept SQLite PRAGMA table_info for PostgreSQL
         if q.upper().startswith("PRAGMA"):
+            m = re.match(r'PRAGMA\s+table_info\((\w+)\)', q, re.IGNORECASE)
+            if m:
+                table_name = m.group(1).lower()
+                pg_info_query = """
+                SELECT 
+                    ordinal_position - 1 AS cid, 
+                    column_name AS name, 
+                    data_type AS type, 
+                    CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END AS notnull, 
+                    column_default AS dflt_value, 
+                    0 AS pk 
+                FROM information_schema.columns 
+                WHERE LOWER(table_name) = %s 
+                ORDER BY ordinal_position;
+                """
+                self._cursor.execute(pg_info_query, (table_name,))
+                return self
+            # Other pragmas (journal_mode, busy_timeout) are safe no-ops in PostgreSQL
             return self
+
         pg_query = sqlite_to_pg_query(query)
+        self._lastrowid = None
+
+        # Check if this is an INSERT statement
+        is_insert = bool(re.match(r'^\s*INSERT\s+INTO\s+', pg_query, re.IGNORECASE))
+        has_returning = 'RETURNING' in pg_query.upper()
+
+        if is_insert:
+            m_tbl = re.search(r'INSERT\s+INTO\s+(\w+)', pg_query, re.IGNORECASE)
+            tbl_name = m_tbl.group(1).lower() if m_tbl else ''
+
+            m_cols = re.search(r'\((.*?)\)\s*VALUES', pg_query, re.IGNORECASE | re.DOTALL)
+            cols = [c.strip().strip('"').lower() for c in m_cols.group(1).split(',')] if m_cols else []
+
+            # Capture explicitly supplied ID from params if present
+            if cols and params:
+                for target_col in ('id', 'phone', 'key'):
+                    if target_col in cols:
+                        idx = cols.index(target_col)
+                        if idx < len(params):
+                            self._lastrowid = params[idx]
+                        break
+
+            # If table has an id column and no explicit id was provided, append RETURNING id
+            if not has_returning and tbl_name in TABLES_WITH_ID and 'id' not in cols:
+                pg_query = pg_query.rstrip('; ') + ' RETURNING id;'
+                has_returning = True
+
+        # Execute on PostgreSQL
         if params is not None:
             if isinstance(params, list):
                 params = tuple(params)
             self._cursor.execute(pg_query, params)
         else:
             self._cursor.execute(pg_query)
+
+        # If RETURNING id was appended, fetch and populate self._lastrowid
+        if is_insert and has_returning and self._lastrowid is None:
+            try:
+                ret = self._cursor.fetchone()
+                if ret:
+                    self._lastrowid = ret['id'] if isinstance(ret, dict) else ret[0]
+            except Exception:
+                pass
+
+        return self
+
+    def executemany(self, query, seq_of_params):
+        pg_query = sqlite_to_pg_query(query)
+        self._cursor.executemany(pg_query, seq_of_params)
         return self
 
     def fetchone(self):
@@ -96,19 +209,15 @@ class PostgresCursorWrapper:
         if not row:
             return None
         col_names = [desc[0] for desc in self._cursor.description]
-        data_dict = dict(zip(col_names, row))
-        return RowWrapper(data_dict, tuple(row))
+        tuple_data = tuple(row[col] for col in col_names)
+        return RowWrapper(dict(row), tuple_data)
 
     def fetchall(self):
         rows = self._cursor.fetchall()
         if not rows:
             return []
         col_names = [desc[0] for desc in self._cursor.description]
-        return [RowWrapper(dict(zip(col_names, r)), tuple(r)) for r in rows]
-
-    @property
-    def rowcount(self):
-        return self._cursor.rowcount
+        return [RowWrapper(dict(r), tuple(r[col] for col in col_names)) for r in rows]
 
     def close(self):
         self._cursor.close()
@@ -119,11 +228,16 @@ class PostgresConnectionWrapper:
         self._conn = raw_conn
 
     def cursor(self):
-        return PostgresCursorWrapper(self._conn.cursor())
+        return PostgresCursorWrapper(self._conn.cursor(), self._conn)
 
     def execute(self, query, params=None):
         cur = self.cursor()
         cur.execute(query, params)
+        return cur
+
+    def executemany(self, query, seq_of_params):
+        cur = self.cursor()
+        cur.executemany(query, seq_of_params)
         return cur
 
     def commit(self):
@@ -135,19 +249,70 @@ class PostgresConnectionWrapper:
     def close(self):
         self._conn.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+
+
+def insert_and_get_id(conn, query: str, params=None):
+    """Uniform helper to execute INSERT and return the inserted row id across both SQLite and PostgreSQL."""
+    cur = conn.execute(query, params)
+    return cur.lastrowid
+
 
 def get_db_connection():
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
         try:
             import psycopg2
+            from psycopg2.extras import RealDictCursor
+
+            # Normalize postgres:// to postgresql://
             if db_url.startswith("postgres://"):
                 db_url = "postgresql://" + db_url[len("postgres://"):]
-            raw_conn = psycopg2.connect(db_url)
-            return PostgresConnectionWrapper(raw_conn)
+
+            # Enforce sslmode=require for cloud PostgreSQL (Neon / Supabase)
+            if "sslmode=" not in db_url:
+                delimiter = "&" if "?" in db_url else "?"
+                db_url = f"{db_url}{delimiter}sslmode=require"
+
+            # Connect with TCP keepalive parameters to prevent idle socket drops
+            conn_args = {
+                "cursor_factory": RealDictCursor,
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+                "connect_timeout": 10
+            }
+
+            # Retry mechanism for Neon serverless cold start (Scale to Zero wake-up)
+            raw_conn = None
+            last_err = None
+            for attempt in range(2):
+                try:
+                    raw_conn = psycopg2.connect(db_url, **conn_args)
+                    break
+                except Exception as ex:
+                    last_err = ex
+                    import time
+                    time.sleep(1.2)
+
+            if raw_conn is not None:
+                return PostgresConnectionWrapper(raw_conn)
+            else:
+                raise last_err
+
         except Exception as e:
             print(f"[Database Adapter] Warning: PostgreSQL connection failed ({e}), falling back to SQLite.")
 
+    # SQLite Local Fallback
     conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
@@ -187,6 +352,10 @@ def init_db():
         reviews_count INTEGER DEFAULT 50,
         amenities TEXT,
         maps_query TEXT DEFAULT 'Algeria',
+        is_eid_mode INTEGER DEFAULT 0,
+        active_chair_id INTEGER DEFAULT 1,
+        chair_2_in_chair_id TEXT,
+        pin_code TEXT DEFAULT '1234',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -420,6 +589,7 @@ def init_db():
         id_card_front TEXT DEFAULT '',
         id_card_back TEXT DEFAULT '',
         selfie_photo TEXT DEFAULT '',
+        equipment_photo TEXT DEFAULT '',
         kyc_status TEXT DEFAULT 'approved', -- 'unsubmitted', 'pending', 'approved', 'rejected'
         kyc_rejection_reason TEXT DEFAULT '',
         kyc_submitted_at TIMESTAMP,
@@ -496,6 +666,12 @@ def init_db():
     salon_cols = [r[1] for r in cursor.fetchall()]
     if "pin_code" not in salon_cols:
         cursor.execute("ALTER TABLE salons ADD COLUMN pin_code TEXT DEFAULT '1234'")
+    if "is_eid_mode" not in salon_cols:
+        cursor.execute("ALTER TABLE salons ADD COLUMN is_eid_mode INTEGER DEFAULT 0")
+    if "active_chair_id" not in salon_cols:
+        cursor.execute("ALTER TABLE salons ADD COLUMN active_chair_id INTEGER DEFAULT 1")
+    if "chair_2_in_chair_id" not in salon_cols:
+        cursor.execute("ALTER TABLE salons ADD COLUMN chair_2_in_chair_id TEXT")
 
     # Ensure barber_free_1 exists for instant testing
     cursor.execute("SELECT id FROM freelance_barbers WHERE id = 'barber_free_1'")
