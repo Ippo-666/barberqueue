@@ -45,6 +45,12 @@ jobs:
             sed -i -E 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle || true
           fi
           if [ -f "android/app/build.gradle" ]; then
+            sed -i -E 's/compileSdkVersion = flutter\.compileSdkVersion/compileSdkVersion = 34/' android/app/build.gradle || true
+            sed -i -E 's/compileSdkVersion [0-9]+/compileSdkVersion 34/' android/app/build.gradle || true
+            sed -i -E 's/compileSdk = flutter\.compileSdkVersion/compileSdk = 34/' android/app/build.gradle || true
+            sed -i -E 's/compileSdk [0-9]+/compileSdk 34/' android/app/build.gradle || true
+            sed -i -E 's/targetSdkVersion [0-9]+/targetSdkVersion 34/' android/app/build.gradle || true
+            sed -i -E 's/targetSdk [0-9]+/targetSdk 34/' android/app/build.gradle || true
             sed -i -E 's/minSdkVersion = flutter\.minSdkVersion/minSdkVersion = 21/' android/app/build.gradle || true
             sed -i -E 's/minSdkVersion [0-9]+/minSdkVersion 21/' android/app/build.gradle || true
             sed -i -E 's/minSdk = flutter\.minSdkVersion/minSdk = 21/' android/app/build.gradle || true
@@ -52,7 +58,7 @@ jobs:
           fi
 
           echo "=== 3. Adding Dependencies ==="
-          flutter pub add webview_flutter webview_flutter_android url_launcher permission_handler connectivity_plus
+          flutter pub add "webview_flutter:^4.7.0" "webview_flutter_android:^3.16.1" "url_launcher:^6.3.0" "permission_handler:^11.3.1" "connectivity_plus:^6.0.5"
           flutter pub add flutter_localizations --sdk=flutter
 
           echo "=== 4. Configuring Android Permissions & Intent Queries ==="
