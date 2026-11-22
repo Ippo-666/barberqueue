@@ -1,0 +1,84 @@
+name: Build BarberQueue APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Create BarberQueue Mobile App
+        run: |
+          set -e
+          echo "=== 1. Creating Flutter App ==="
+          flutter create barber_app --org com.barberqueue.dz --platforms android
+          cd barber_app
+
+          echo "=== 2. Upgrading Kotlin Version for Android Compatibility ==="
+          if [ -f "android/settings.gradle" ]; then
+            sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle || true
+          fi
+          if [ -f "android/build.gradle" ]; then
+            sed -i -E 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle || true
+          fi
+
+          echo "=== 3. Adding Dependencies ==="
+          flutter pub add webview_flutter webview_flutter_android url_launcher
+
+          echo "=== 4. Configuring Android Permissions & Intent Queries ==="
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.CAMERA"/>' "$MANIFEST"
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
+          
+          # Add Package Visibility Queries for Android 11+ (WhatsApp, Maps, Tel)
+          QUERIES='<queries>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="whatsapp" /></intent>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="tel" /></intent>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="geo" /></intent>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>\n</queries>'
+          sed -i "/<manifest/a \$QUERIES" "$MANIFEST"
+
+          echo "=== 5. Writing lib/main.dart with PopScope & Deep Linking ==="
+          python3 -c "import base64; open('lib/main.dart', 'wb').write(base64.b64decode('aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpmbHV0dGVyL3NlcnZpY2VzLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6d2Vidmlld19mbHV0dGVyL3dlYnZpZXdfZmx1dHRlci5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOndlYnZpZXdfZmx1dHRlcl9hbmRyb2lkL3dlYnZpZXdfZmx1dHRlcl9hbmRyb2lkLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6dXJsX2xhdW5jaGVyL3VybF9sYXVuY2hlci5kYXJ0JzsKCnZvaWQgbWFpbigpIHsKICBXaWRnZXRzRmx1dHRlckJpbmRpbmcuZW5zdXJlSW5pdGlhbGl6ZWQoKTsKICBTeXN0ZW1DaHJvbWUuc2V0U3lzdGVtVUlPdmVybGF5U3R5bGUoY29uc3QgU3lzdGVtVWlPdmVybGF5U3R5bGUoCiAgICBzdGF0dXNCYXJDb2xvcjogQ29sb3JzLnRyYW5zcGFyZW50LAogICAgc3RhdHVzQmFySWNvbkJyaWdodG5lc3M6IEJyaWdodG5lc3MubGlnaHQsCiAgICBzeXN0ZW1OYXZpZ2F0aW9uQmFyQ29sb3I6IENvbG9yKDB4RkYwQjBGMTkpLAogICAgc3lzdGVtTmF2aWdhdGlvbkJhckljb25CcmlnaHRuZXNzOiBCcmlnaHRuZXNzLmxpZ2h0LAogICkpOwogIHJ1bkFwcChjb25zdCBCYXJiZXJRdWV1ZUFwcCgpKTsKfQoKY2xhc3MgQmFyYmVyUXVldWVBcHAgZXh0ZW5kcyBTdGF0ZWxlc3NXaWRnZXQgewogIGNvbnN0IEJhcmJlclF1ZXVlQXBwKHtzdXBlci5rZXl9KTsKCiAgQG92ZXJyaWRlCiAgV2lkZ2V0IGJ1aWxkKEJ1aWxkQ29udGV4dCBjb250ZXh0KSB7CiAgICByZXR1cm4gTWF0ZXJpYWxBcHAoCiAgICAgIHRpdGxlOiAnQmFyYmVyUXVldWUnLAogICAgICBkZWJ1Z1Nob3dDaGVja2VkTW9kZUJhbm5lcjogZmFsc2UsCiAgICAgIHRoZW1lOiBUaGVtZURhdGEuZGFyaygpLmNvcHlXaXRoKAogICAgICAgIHNjYWZmb2xkQmFja2dyb3VuZENvbG9yOiBjb25zdCBDb2xvcigweEZGMEIwRjE5KSwKICAgICAgKSwKICAgICAgaG9tZTogY29uc3QgQmFyYmVySG9tZVNjcmVlbigpLAogICAgKTsKICB9Cn0KCmNsYXNzIEJhcmJlckhvbWVTY3JlZW4gZXh0ZW5kcyBTdGF0ZWZ1bFdpZGdldCB7CiAgY29uc3QgQmFyYmVySG9tZVNjcmVlbih7c3VwZXIua2V5fSk7CgogIEBvdmVycmlkZQogIEJhcmJlckhvbWVTY3JlZW5TdGF0ZSBjcmVhdGVTdGF0ZSgpID0+IEJhcmJlckhvbWVTY3JlZW5TdGF0ZSgpOwp9CgpjbGFzcyBCYXJiZXJIb21lU2NyZWVuU3RhdGUgZXh0ZW5kcyBTdGF0ZTxCYXJiZXJIb21lU2NyZWVuPiB7CiAgbGF0ZSBmaW5hbCBXZWJWaWV3Q29udHJvbGxlciBjb250cm9sbGVyOwogIGJvb2wgaXNMb2FkaW5nID0gdHJ1ZTsKICBTdHJpbmcgY3VycmVudFVybCA9ICdodHRwczovL2JhcmJlcnF1ZXVlLWR6Lm9ucmVuZGVyLmNvbS9wb3J0YWwnOwoKICBAb3ZlcnJpZGUKICB2b2lkIGluaXRTdGF0ZSgpIHsKICAgIHN1cGVyLmluaXRTdGF0ZSgpOwogICAgY29udHJvbGxlciA9IFdlYlZpZXdDb250cm9sbGVyKCkKICAgICAgLi5zZXRKYXZhU2NyaXB0TW9kZShKYXZhU2NyaXB0TW9kZS51bnJlc3RyaWN0ZWQpCiAgICAgIC4uc2V0QmFja2dyb3VuZENvbG9yKGNvbnN0IENvbG9yKDB4RkYwQjBGMTkpKQogICAgICAuLnNldE5hdmlnYXRpb25EZWxlZ2F0ZSgKICAgICAgICBOYXZpZ2F0aW9uRGVsZWdhdGUoCiAgICAgICAgICBvblBhZ2VTdGFydGVkOiAoU3RyaW5nIHVybCkgewogICAgICAgICAgICBzZXRTdGF0ZSgoKSB7CiAgICAgICAgICAgICAgaXNMb2FkaW5nID0gdHJ1ZTsKICAgICAgICAgICAgfSk7CiAgICAgICAgICB9LAogICAgICAgICAgb25QYWdlRmluaXNoZWQ6IChTdHJpbmcgdXJsKSB7CiAgICAgICAgICAgIHNldFN0YXRlKCgpIHsKICAgICAgICAgICAgICBpc0xvYWRpbmcgPSBmYWxzZTsKICAgICAgICAgICAgfSk7CiAgICAgICAgICB9LAogICAgICAgICAgb25OYXZpZ2F0aW9uUmVxdWVzdDogKE5hdmlnYXRpb25SZXF1ZXN0IHJlcXVlc3QpIGFzeW5jIHsKICAgICAgICAgICAgZmluYWwgdXJpID0gVXJpLnBhcnNlKHJlcXVlc3QudXJsKTsKICAgICAgICAgICAgZmluYWwgc2NoZW1lID0gdXJpLnNjaGVtZS50b0xvd2VyQ2FzZSgpOwogICAgICAgICAgICBpZiAoc2NoZW1lID09ICd0ZWwnIHx8CiAgICAgICAgICAgICAgICBzY2hlbWUgPT0gJ3doYXRzYXBwJyB8fAogICAgICAgICAgICAgICAgc2NoZW1lID09ICdpbnRlbnQnIHx8CiAgICAgICAgICAgICAgICBzY2hlbWUgPT0gJ2dlbycgfHwKICAgICAgICAgICAgICAgIHNjaGVtZSA9PSAnbWFpbHRvJyB8fAogICAgICAgICAgICAgICAgcmVxdWVzdC51cmwuY29udGFpbnMoJ3dhLm1lJykgfHwKICAgICAgICAgICAgICAgIHJlcXVlc3QudXJsLmNvbnRhaW5zKCdtYXBzLmdvb2dsZS5jb20nKSB8fAogICAgICAgICAgICAgICAgcmVxdWVzdC51cmwuY29udGFpbnMoJ2dvb2dsZS5jb20vbWFwcycpKSB7CiAgICAgICAgICAgICAgdHJ5IHsKICAgICAgICAgICAgICAgIGF3YWl0IGxhdW5jaFVybCh1cmksIG1vZGU6IExhdW5jaE1vZGUuZXh0ZXJuYWxBcHBsaWNhdGlvbik7CiAgICAgICAgICAgICAgfSBjYXRjaCAoZSkgewogICAgICAgICAgICAgICAgLy8gRmFsbGJhY2sKICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgcmV0dXJuIE5hdmlnYXRpb25EZWNpc2lvbi5wcmV2ZW50OwogICAgICAgICAgICB9CiAgICAgICAgICAgIHJldHVybiBOYXZpZ2F0aW9uRGVjaXNpb24ubmF2aWdhdGU7CiAgICAgICAgICB9LAogICAgICAgICksCiAgICAgICk7CgogICAgaWYgKGNvbnRyb2xsZXIucGxhdGZvcm0gaXMgQW5kcm9pZFdlYlZpZXdDb250cm9sbGVyKSB7CiAgICAgIChjb250cm9sbGVyLnBsYXRmb3JtIGFzIEFuZHJvaWRXZWJWaWV3Q29udHJvbGxlcikuc2V0R2VvbG9jYXRpb25QZXJtaXNzaW9uc1Byb21wdENhbGxiYWNrcygKICAgICAgICBvblNob3dQcm9tcHQ6IChyZXF1ZXN0KSBhc3luYyA9PiBjb25zdCBHZW9sb2NhdGlvblBlcm1pc3Npb25zUmVzcG9uc2UoYWxsb3c6IHRydWUsIHJldGFpbjogdHJ1ZSksCiAgICAgICk7CiAgICB9CgogICAgY29udHJvbGxlci5sb2FkUmVxdWVzdChVcmkucGFyc2UoY3VycmVudFVybCkpOwogIH0KCiAgQG92ZXJyaWRlCiAgV2lkZ2V0IGJ1aWxkKEJ1aWxkQ29udGV4dCBjb250ZXh0KSB7CiAgICByZXR1cm4gUG9wU2NvcGUoCiAgICAgIGNhblBvcDogZmFsc2UsCiAgICAgIG9uUG9wSW52b2tlZFdpdGhSZXN1bHQ6IChib29sIGRpZFBvcCwgT2JqZWN0PyByZXN1bHQpIGFzeW5jIHsKICAgICAgICBpZiAoZGlkUG9wKSByZXR1cm47CiAgICAgICAgZmluYWwgY2FuR29CYWNrID0gYXdhaXQgY29udHJvbGxlci5jYW5Hb0JhY2soKTsKICAgICAgICBpZiAoY2FuR29CYWNrKSB7CiAgICAgICAgICBhd2FpdCBjb250cm9sbGVyLmdvQmFjaygpOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICBTeXN0ZW1OYXZpZ2F0b3IucG9wKCk7CiAgICAgICAgfQogICAgICB9LAogICAgICBjaGlsZDogU2NhZmZvbGQoCiAgICAgICAgYmFja2dyb3VuZENvbG9yOiBjb25zdCBDb2xvcigweEZGMEIwRjE5KSwKICAgICAgICBib2R5OiBTYWZlQXJlYSgKICAgICAgICAgIGNoaWxkOiBTdGFjaygKICAgICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgICBXZWJWaWV3V2lkZ2V0KGNvbnRyb2xsZXI6IGNvbnRyb2xsZXIpLAogICAgICAgICAgICAgIGlmIChpc0xvYWRpbmcpCiAgICAgICAgICAgICAgICBjb25zdCBDZW50ZXIoCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBDaXJjdWxhclByb2dyZXNzSW5kaWNhdG9yKAogICAgICAgICAgICAgICAgICAgIHZhbHVlQ29sb3I6IEFsd2F5c1N0b3BwZWRBbmltYXRpb248Q29sb3I+KENvbG9yKDB4RkZGNTlFMEIpKSwKICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgIF0sCiAgICAgICAgICApLAogICAgICAgICksCiAgICAgICksCiAgICApOwogIH0KfQo='))"
+          echo "lib/main.dart written successfully!"
+
+          echo "=== 6. Building Release APK ==="
+          flutter build apk --release
+
+          echo "=== 7. Copying APK ==="
+          cp build/app/outputs/flutter-apk/app-release.apk ../BarberQueue.apk
+          echo "APK build complete: BarberQueue.apk"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BarberQueue-APK
+          path: BarberQueue.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v1.0.1-${{ github.run_number }}" BarberQueue.apk \
+            --title "BarberQueue Android App v1.0.1" \
+            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.1: دعم زر الرجوع PopScope، تكامل الواتساب والـ GPS الخارجي، إخفاء الشريط التلقائي مع لوحة المفاتيح، والإنعاش التلقائي بعد قفل الشاشة." || true
