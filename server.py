@@ -44,6 +44,13 @@ app.config['SECRET_KEY'] = 'barber-queue-dz-secret-2026'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
 
+# Auto-initialize database tables on boot (Gunicorn / Serverless / Local)
+try:
+    init_db()
+    print("[Database] Schema verified & seeded successfully!")
+except Exception as e:
+    print(f"[Database] Schema init warning: {e}")
+
 # Real-time SSE Broadcaster
 class EventBroadcaster:
     def __init__(self):
