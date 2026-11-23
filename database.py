@@ -25,6 +25,8 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "barber_queue.db")
 # DUAL-ENGINE ADAPTER: PostgreSQL (Production / Cloud) + SQLite (Local)
 # =====================================================================
 
+import datetime
+
 class RowWrapper(dict):
     """
     Drop-in replacement for sqlite3.Row in PostgreSQL.
@@ -32,10 +34,28 @@ class RowWrapper(dict):
     1. By column name: row['id'], row['customer_name'] (via RealDictCursor dict keys)
     2. By integer index: row[0], row[1] (via tuple index)
     3. Dict methods: row.get('key'), row.keys(), row.items(), dict(row)
+    4. Automatically stringifies datetime/date to match SQLite behavior for Jinja2 templates & JSON.
     """
     def __init__(self, data_dict, tuple_data):
-        super().__init__(data_dict)
-        self._tuple = tuple_data
+        cleaned_dict = {}
+        for k, v in data_dict.items():
+            if isinstance(v, datetime.datetime):
+                cleaned_dict[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+            elif isinstance(v, datetime.date):
+                cleaned_dict[k] = v.strftime("%Y-%m-%d")
+            else:
+                cleaned_dict[k] = v
+        super().__init__(cleaned_dict)
+
+        cleaned_tuple = []
+        for v in tuple_data:
+            if isinstance(v, datetime.datetime):
+                cleaned_tuple.append(v.strftime("%Y-%m-%d %H:%M:%S"))
+            elif isinstance(v, datetime.date):
+                cleaned_tuple.append(v.strftime("%Y-%m-%d"))
+            else:
+                cleaned_tuple.append(v)
+        self._tuple = tuple(cleaned_tuple)
 
     def __getitem__(self, item):
         if isinstance(item, int):
