@@ -8,14 +8,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 // =========================================================================
-// 🌐 CONFIGURATION: رابط خادم المنصة (الرابط السحابي عند الرفع أو الـ IP المحلي)
+// 🌐 CONFIGURATION: رابط خادم المنصة الدائم بشهادة HTTPS
 // =========================================================================
 class AppConfig {
-  // بمجرد الرفع على Render، استبدل الرابط أدناه برابطك المباشر: https://barberqueue-dz.onrender.com
   static const String serverUrl = "https://barberqueue-dz.onrender.com/portal";
-  
-  // رابط احتياطي للتجربة المحلية عبر الواي فاي
-  static const String localFallbackUrl = "http://192.168.100.66:5000/portal";
+  static const String baseUrl = "https://barberqueue-dz.onrender.com";
 }
 
 void main() async {
@@ -26,7 +23,7 @@ void main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0B0F19),
+      systemNavigationBarColor: Color(0xFF0F172A),
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
@@ -40,7 +37,7 @@ class BarberQueueNativeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'دورك BarberQueue DZ',
+      title: 'دورك (Dorek)',
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('fr')],
@@ -56,7 +53,7 @@ class BarberQueueNativeApp extends StatelessWidget {
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFF59E0B),
           secondary: Color(0xFF10B981), // Emerald 500
-          surface: Color(0xFF111827),
+          surface: Color(0xFF0F172A),
         ),
         fontFamily: 'Tajawal',
       ),
@@ -66,7 +63,7 @@ class BarberQueueNativeApp extends StatelessWidget {
 }
 
 // =========================================================================
-// 1. NATIVE SPLASH SCREEN (شاشة البداية الاحترافية)
+// 1. NATIVE SPLASH SCREEN (شاشة البداية بدون طلب الكاميرا)
 // =========================================================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -85,7 +82,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1200),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animController,
@@ -97,20 +94,16 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _requestPermissionsAndNavigate() async {
-    // طلب صلاحيات الـ GPS والكاميرا في الخلفية
+    // طلب صلاحية الموقع فقط (GPS) وقت الإقلاع دون طلب الكاميرا
     try {
-      await [
-        Permission.location,
-        Permission.locationWhenInUse,
-        Permission.camera,
-      ].request();
+      await Permission.locationWhenInUse.request();
     } catch (_) {}
 
-    await Future.delayed(const Duration(milliseconds: 2200));
+    await Future.delayed(const Duration(milliseconds: 1400));
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 600),
+          transitionDuration: const Duration(milliseconds: 400),
           pageBuilder: (_, __, ___) => const WebViewScreen(),
           transitionsBuilder: (_, animation, __, child) =>
               FadeTransition(opacity: animation, child: child),
@@ -147,7 +140,7 @@ class _SplashScreenState extends State<SplashScreen>
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFF59E0B).withOpacity(0.3),
+                      color: const Color(0xFFF59E0B).withOpacity(0.35),
                       blurRadius: 24,
                       offset: const Offset(0, 10),
                     ),
@@ -161,7 +154,7 @@ class _SplashScreenState extends State<SplashScreen>
               const Text(
                 'دَوْرُك',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 34,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   letterSpacing: 1.2,
@@ -194,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // =========================================================================
-// 2. MAIN WEBVIEW SCREEN (تغليف المنصة مع معالجة الروابط وفقدان الشبكة)
+// 2. MAIN WEBVIEW SCREEN WITH NATIVE BOTTOM NAVIGATION BAR
 // =========================================================================
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -208,7 +201,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _isLoading = true;
   double _progress = 0.0;
   bool _hasError = false;
+  String _errorMessage = '';
   String _currentUrl = AppConfig.serverUrl;
+
+  // 4 Native Navigation Tabs
+  static const List<String> _tabUrls = [
+    '${AppConfig.baseUrl}/portal',
+    '${AppConfig.baseUrl}/explore',
+    '${AppConfig.baseUrl}/freelance/request',
+    '${AppConfig.baseUrl}/login',
+  ];
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -224,40 +227,73 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (int progress) {
-            setState(() {
-              _progress = progress / 100.0;
-            });
-          },
-          onPageStarted: (String url) {
-            setState(() {
-              _isLoading = true;
-              _hasError = false;
-              _currentUrl = url;
-            });
-          },
-          onPageFinished: (String url) {
-            setState(() {
-              _isLoading = false;
-              _progress = 0.0;
-            });
-          },
-          onWebResourceError: (WebResourceError error) {
-            // عند انقطاع الإنترنت أو تعذر الوصول للسيرفر
-            if (error.isForMainFrame ?? true) {
+            if (mounted) {
               setState(() {
-                _hasError = true;
-                _isLoading = false;
+                _progress = progress / 100.0;
+                if (progress >= 95) {
+                  _isLoading = false;
+                }
               });
             }
           },
-          onNavigationRequest: (NavigationRequest request) async {
+          onPageStarted: (String url) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _hasError = false;
+                _currentUrl = url;
+                _updateCurrentTabFromUrl(url);
+              });
+            }
+          },
+          onPageFinished: (String url) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _progress = 0.0;
+                _updateCurrentTabFromUrl(url);
+              });
+            }
+            // إخفاء الشريط السفلي للويب داخل التطبيق الأصلي لتفادي التكرار
+            _controller.runJavaScript("""
+              (function() {
+                var webNav = document.querySelector('nav.fixed.bottom-0');
+                if (webNav) webNav.style.display = 'none';
+                document.body.style.paddingBottom = '8px';
+              })();
+            """);
+          },
+          onWebResourceError: (WebResourceError error) {
+            if (error.isForMainFrame ?? true) {
+              if (mounted) {
+                setState(() {
+                  _hasError = true;
+                  _isLoading = false;
+                  _errorMessage = error.description;
+                });
+              }
+            }
+            // تنبيه مرئي عند فشل أي مورد رئيسي
+            if (mounted && error.errorCode != -1) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'تعذر تحميل الصفحة: ${error.description}',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                  ),
+                  backgroundColor: const Color(0xFFE11D48),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          },
+          onNavigationRequest: (NavigationRequest request) {
             final uri = Uri.parse(request.url);
 
-            // 1. فتح روابط الاتصال الهاتفي مباشرة في تطبيق الهاتف الأصلي
+            // 1. فتح روابط الاتصال الهاتفي مباشرة في تطبيق الهاتف
             if (uri.scheme == 'tel') {
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri);
-              }
+              launchUrl(uri);
               return NavigationDecision.prevent;
             }
 
@@ -265,38 +301,41 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (uri.scheme == 'whatsapp' ||
                 uri.host.contains('wa.me') ||
                 uri.host.contains('whatsapp.com')) {
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
+              launchUrl(uri, mode: LaunchMode.externalApplication);
               return NavigationDecision.prevent;
             }
 
-            // 3. فتح روابط خرائط Google Maps في تطبيق الخرائط الأصلي
+            // 3. فتح روابط خرائط Google Maps في تطبيق الخرائط
             if (uri.host.contains('maps.google.com') ||
                 uri.host.contains('goo.gl') ||
-                uri.path.contains('/maps')) {
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
+                uri.host.contains('maps.app.goo.gl')) {
+              launchUrl(uri, mode: LaunchMode.externalApplication);
               return NavigationDecision.prevent;
             }
 
-            // السماح بالتنقل داخل التطبيق
+            // استجابة بصرية فورية (0 مللي ثانية) عند النقر على أي رابط داخلي
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _progress = 0.15;
+              });
+            }
+
+            // السماح الكامل بجميع روابط المنصة
             return NavigationDecision.navigate;
           },
         ),
       );
 
-    // تفعيل إعدادات متقدمة لأندرويد (تحديد الموقع داخل WebView وحفظ الجلسات)
+    // تفعيل إعدادات أندرويد ومنح صلاحيات الـ GPS لصفحات الويب تلقائياً
     if (controller.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(false);
       final androidController = controller.platform as AndroidWebViewController;
       androidController.setGeolocationPermissionsPromptCallbacks(
         onShowPrompt: (request) async {
-          // التأكد من منح صلاحية الموقع على مستوى نظام الأندرويد
-          var status = await Permission.location.status;
+          var status = await Permission.locationWhenInUse.status;
           if (!status.isGranted) {
-            status = await Permission.location.request();
+            status = await Permission.locationWhenInUse.request();
           }
           return GeolocationPermissionsResponse(
             allow: status.isGranted,
@@ -310,12 +349,39 @@ class _WebViewScreenState extends State<WebViewScreen> {
     _controller.loadRequest(Uri.parse(_currentUrl));
   }
 
+  void _updateCurrentTabFromUrl(String url) {
+    if (url.contains('/explore')) {
+      _currentIndex = 1;
+    } else if (url.contains('/freelance/request') || url.contains('/freelance/req')) {
+      _currentIndex = 2;
+    } else if (url.contains('/login')) {
+      _currentIndex = 3;
+    } else if (url.contains('/portal') || url.endsWith('.com/') || url.endsWith('.com')) {
+      _currentIndex = 0;
+    }
+  }
+
+  void _onTabTapped(int index) {
+    if (_currentIndex == index) {
+      _reloadPage();
+      return;
+    }
+    setState(() {
+      _currentIndex = index;
+      _isLoading = true;
+      _progress = 0.2;
+    });
+    _controller.loadRequest(Uri.parse(_tabUrls[index]));
+  }
+
   Future<void> _checkConnectivity() async {
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
-      setState(() {
-        _hasError = true;
-      });
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+        });
+      }
     }
   }
 
@@ -323,6 +389,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _progress = 0.15;
     });
     _controller.reload();
   }
@@ -391,7 +458,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   child: WebViewWidget(controller: _controller),
                 ),
 
-              // 2. Custom Native Offline Error View (بديل شاشة خطأ المتصفح)
+              // 2. Custom Native Offline / Error View
               if (_hasError)
                 Center(
                   child: Padding(
@@ -423,10 +490,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'يرجى التأكد من تشغيل بيانات الهاتف (4G) أو الاتصال بشبكة Wi-Fi، ثم أعد المحاولة.',
+                        Text(
+                          _errorMessage.isNotEmpty
+                              ? 'السبب: $_errorMessage\nيرجى التأكد من تشغيل بيانات 4G أو الواي فاي.'
+                              : 'يرجى التأكد من تشغيل بيانات الهاتف (4G) أو الاتصال بشبكة Wi-Fi، ثم أعد المحاولة.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF94A3B8),
                             height: 1.5,
@@ -457,7 +526,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ),
                 ),
 
-              // 3. Top Progress Loading Bar
+              // 3. Top Progress Loading Bar (Amber 500)
               if (_isLoading && !_hasError)
                 Positioned(
                   top: 0,
@@ -469,9 +538,55 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     valueColor: const AlwaysStoppedAnimation<Color>(
                       Color(0xFFF59E0B),
                     ),
-                    minHeight: 2.5,
+                    minHeight: 3.0,
                   ),
                 ),
+            ],
+          ),
+        ),
+
+        // 4. Native Bottom Navigation Bar (أصلي وسريع بدون لاق)
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0F172A),
+            border: Border(
+              top: BorderSide(
+                color: Color(0xFF1E293B),
+                width: 1.0,
+              ),
+            ),
+          ),
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: _onTabTapped,
+            backgroundColor: const Color(0xFF0F172A),
+            selectedItemColor: const Color(0xFFF59E0B),
+            unselectedItemColor: const Color(0xFF94A3B8),
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            type: BottomNavigationBarType.fixed,
+            elevation: 8,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_rounded),
+                activeIcon: Icon(Icons.home_rounded, color: Color(0xFFF59E0B)),
+                label: 'الرئيسية',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.content_cut_rounded),
+                activeIcon: Icon(Icons.content_cut_rounded, color: Color(0xFFF59E0B)),
+                label: 'الصالونات',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.two_wheeler_rounded),
+                activeIcon: Icon(Icons.two_wheeler_rounded, color: Color(0xFFF59E0B)),
+                label: 'حلاق للدار',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_rounded),
+                activeIcon: Icon(Icons.person_rounded, color: Color(0xFFF59E0B)),
+                label: 'حسابي',
+              ),
             ],
           ),
         ),
