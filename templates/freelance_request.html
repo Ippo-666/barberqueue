@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>طلب حلاق متنقل لبيتك أو فندقك (خدمة منزلية) - دورك BarberQueue</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Tajawal', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .custom-scroll::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-[#0B0F19] text-slate-100 min-h-screen pb-24 antialiased flex flex-col items-center">
+
+  <!-- TOP APP BAR -->
+  <header class="w-full max-w-xl bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/20">
+        🛵
+      </div>
+      <div>
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-sm font-black text-white leading-tight">طلب حلاق متنقل للبيت</h1>
+          <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded-full font-bold">خدمة منزلية VIP</span>
+        </div>
+        <p class="text-[10px] text-slate-400">حلاق محترف ومعتمد يأتيك أينما كنت</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="/portal" class="text-xs bg-slate-800/90 hover:bg-slate-700 text-amber-400 hover:text-amber-300 px-3 py-1.5 rounded-xl border border-amber-500/30 transition font-bold flex items-center gap-1.5 shadow-sm">
+        <span>←</span>
+        <span>رجوع</span>
+      </a>
+      <a href="/explore" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded-xl border border-slate-700 transition font-bold" title="دليل صالونات الحلاقة">
+        💈
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="w-full max-w-xl px-4 py-4 space-y-4">
+
+    <!-- HERO CALLOUT BANNER -->
+    <div class="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/40 shadow-xl space-y-2 relative overflow-hidden">
+      <div class="absolute -top-10 -left-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+      <div class="relative z-10 flex items-center justify-between">
+        <span class="text-[11px] font-bold text-emerald-400">نظام بريكورام وياسير للمنازل 🇩🇿</span>
+        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">عتاد معقم 100%</span>
+      </div>
+      
+      <h2 class="relative z-10 text-base sm:text-lg font-black text-white leading-tight">
+        ريح في دارك وحلق شعرك ولحيتك باحترافية! ✂️
+      </h2>
+      <p class="relative z-10 text-xs text-slate-400 leading-relaxed">
+        حدد موقعك ونوع الحلاقة وسيتنقل إليك حلاق حر معتمد بحقيبة عتاد معقمة ومجهزة، بدراجة نارية أو سيارة سريعة.
+      </p>
+
+      <!-- Trust & Safety Banner (حرمة البيوت وأمان العائلات) -->
+      <div class="pt-2 border-t border-slate-800/80 flex items-center gap-2 text-[11px] text-emerald-300 font-bold">
+        <span class="text-base">🛡️</span>
+        <span>ضمان الأمان: جميع الحلاقين معتمدون بعد فحص بطاقة التعريف الوطنية البيومترية (KYC).</span>
+      </div>
+    </div>
+
+    <!-- BOOKING FORM -->
+    <form id="home-request-form" onsubmit="submitHomeRequest(event)" class="space-y-4">
+
+      <!-- STEP 1: LOCATION & ADDRESS -->
+      <div class="bg-slate-900 rounded-3xl border border-slate-800 p-4 sm:p-5 space-y-3">
+        <div class="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+          <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black flex items-center justify-center">1</span>
+          <h3 class="text-sm font-black text-white">موقع وعنوان الحلاقة 📍</h3>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">الولاية: *</label>
+            <input type="text" id="req-wilaya" readonly value="الجزائر العاصمة (16)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-300 font-bold focus:outline-none">
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="font-bold text-slate-300">البلدية: *</label>
+              <button type="button" onclick="detectUserLocation()" id="gps-btn" class="px-2.5 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg text-[10px] font-bold transition flex items-center gap-1">
+                <span id="gps-icon">📍</span>
+                <span id="gps-text">تحديد موقعي تلقائياً (GPS)</span>
+              </button>
+            </div>
+            <!-- Quick Commune Chips -->
+            <div class="flex flex-wrap gap-1.5 mb-2">
+              <button type="button" onclick="selectCommune('باب الزوار')" class="commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold">باب الزوار</button>
+              <button type="button" onclick="selectCommune('الدار البيضاء')" class="commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold">الدار البيضاء</button>
+              <button type="button" onclick="selectCommune('برج الكيفان')" class="commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold">برج الكيفان</button>
+              <button type="button" onclick="selectCommune('درارية')" class="commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold">درارية</button>
+              <button type="button" onclick="selectCommune('الشراقة')" class="commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold">الشراقة</button>
+              <button type="button" onclick="selectCommune('دالي ابراهيم')" class="commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold">دالي ابراهيم</button>
+            </div>
+            <input type="text" id="req-commune" required placeholder="أو اكتب اسم بلديتك هنا..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:border-emerald-500">
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">تفاصيل العنوان الدقيق: *</label>
+            <input type="text" id="req-address" required placeholder="مثال: حي الصومام عمارة 12، الطابق 2، شقة 5 (أو فيلا رقم...)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: SELECT SERVICES -->
+      <div class="bg-slate-900 rounded-3xl border border-slate-800 p-4 sm:p-5 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black flex items-center justify-center">2</span>
+            <h3 class="text-sm font-black text-white">نوع الحلاقة المطلوبة ✂️</h3>
+          </div>
+          <span class="text-xs font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl">
+            المجموع: <span id="total-price-display">1500</span> د.ج
+          </span>
+        </div>
+
+        <div class="space-y-2.5">
+          <!-- Service Option 1 (VIP Package - Default) -->
+          <label class="service-card flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/80 border-2 border-emerald-500 cursor-pointer transition hover:border-emerald-400">
+            <div class="flex items-center gap-3">
+              <input type="radio" name="selected_service" value="باقة VIP متكاملة (شعر + لحية + تنظيف بشرة)" data-price="1500" checked onchange="updateSelectedService(this)" class="w-4 h-4 accent-emerald-500">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-black text-white">باقة VIP كاملة (شعر + لحية + تنظيف بشرة) 👑</span>
+                  <span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full font-bold">الأكثر طلباً</span>
+                </div>
+                <p class="text-[11px] text-slate-400">حلاقة مدرجة (Fade) + تحديد لحية بالبخار + ماسك طين البحر الميت</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-emerald-400 shrink-0">1500 د.ج</span>
+          </label>
+
+          <!-- Service Option 2 (Haircut Only) -->
+          <label class="service-card flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 cursor-pointer transition hover:border-slate-700">
+            <div class="flex items-center gap-3">
+              <input type="radio" name="selected_service" value="حلاقة شعر عصرية (Fade / كلاسيك)" data-price="800" onchange="updateSelectedService(this)" class="w-4 h-4 accent-emerald-500">
+              <div>
+                <span class="text-xs font-black text-white">قص وتصفيف شعر عصري (Fade / كلاسيك) ✂️</span>
+                <p class="text-[11px] text-slate-400">حلاقة شعر كاملة مع تصفيف وغسيل سريع</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-emerald-400 shrink-0">800 د.ج</span>
+          </label>
+
+          <!-- Service Option 3 (Beard Grooming) -->
+          <label class="service-card flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 cursor-pointer transition hover:border-slate-700">
+            <div class="flex items-center gap-3">
+              <input type="radio" name="selected_service" value="تحديد لحية ملكي بالمنشفة الساخنة" data-price="500" onchange="updateSelectedService(this)" class="w-4 h-4 accent-emerald-500">
+              <div>
+                <span class="text-xs font-black text-white">تحديد لحية ملكي بالمنشفة الساخنة 🧔</span>
+                <p class="text-[11px] text-slate-400">رسم كونتور دقيق مع زيوت أرجان وترطيب طبيعي</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-emerald-400 shrink-0">500 د.ج</span>
+          </label>
+
+          <!-- Service Option 4 (Kids Haircut) -->
+          <label class="service-card flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 cursor-pointer transition hover:border-slate-700">
+            <div class="flex items-center gap-3">
+              <input type="radio" name="selected_service" value="حلاقة أطفال في المنزل" data-price="600" onchange="updateSelectedService(this)" class="w-4 h-4 accent-emerald-500">
+              <div>
+                <span class="text-xs font-black text-white">حلاقة أطفال لطيفة في المنزل 👦</span>
+                <p class="text-[11px] text-slate-400">حلاقة هادئة ومريحة للطفل داخل أمان منزله</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-emerald-400 shrink-0">600 د.ج</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- STEP 3: MATCHING MODE (INDRIVE / YASSIR STYLE) -->
+      <div class="bg-slate-900 rounded-3xl border border-slate-800 p-4 sm:p-5 space-y-3">
+        <div class="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+          <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black flex items-center justify-center">3</span>
+          <h3 class="text-sm font-black text-white">طريقة اختيار الحلاق 🛵</h3>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <!-- Option A: Fast Broadcast (Recommended) -->
+          <label class="matching-card p-3 rounded-2xl bg-slate-950/80 border-2 border-emerald-500 cursor-pointer transition flex flex-col justify-between">
+            <div class="flex items-start gap-2.5 mb-2">
+              <input type="radio" name="matching_mode" value="broadcast" checked onchange="toggleMatchingMode('broadcast')" class="mt-1 w-4 h-4 accent-emerald-500">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-black text-white">طلب فوري لأقرب حلاق ⚡</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                  بث الطلب لجميع الحلاقين المتصلين في بلديتك، وأول من يقبله يتحرك إليك فوراً (أسرع خيار).
+                </p>
+              </div>
+            </div>
+            <span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-lg self-start">
+              موصى به للسرعة 🚀
+            </span>
+          </label>
+
+          <!-- Option B: Pick Specific Barber -->
+          <label class="matching-card p-3 rounded-2xl bg-slate-950/60 border border-slate-800 cursor-pointer transition flex flex-col justify-between hover:border-slate-700">
+            <div class="flex items-start gap-2.5 mb-2">
+              <input type="radio" name="matching_mode" value="specific" onchange="toggleMatchingMode('specific')" class="mt-1 w-4 h-4 accent-emerald-500">
+              <div>
+                <span class="text-xs font-black text-white">اختيار حلاق محدد بالاسم 🎯</span>
+                <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                  تصفح بروفايلات الحلاقين المتصلين، واختر حلاقك المفضل حسب تقييمه وسيارته.
+                </p>
+              </div>
+            </div>
+            <span class="text-[10px] text-slate-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg self-start">
+              تصفح التقييمات ⭐
+            </span>
+          </label>
+        </div>
+
+        <!-- SPECIFIC BARBERS SELECTION LIST (HIDDEN IN BROADCAST MODE) -->
+        <div id="specific-barbers-container" class="hidden pt-2 space-y-2">
+          <span class="text-[11px] font-bold text-slate-300 block">اختر الحلاق الذي ترغب فيه:</span>
+          
+          <div class="space-y-2">
+            {% for b in barbers %}
+            <label class="specific-barber-item flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer transition hover:border-emerald-500/60">
+              <div class="flex items-center gap-3">
+                <input type="radio" name="specific_barber_id" value="{{ b.id }}" class="w-4 h-4 accent-emerald-500">
+                <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-xl shrink-0">
+                  {% if b.vehicle_type == 'car' %}🚗{% else %}🛵{% endif %}
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-xs font-black text-white">{{ b.name }}</span>
+                    <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full font-bold">✔ معتمد</span>
+                  </div>
+                  <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                    <span class="text-amber-400 font-bold">⭐ {{ b.rating }} ({{ b.reviews_count }})</span>
+                    <span>•</span>
+                    <span>{{ b.commune }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="text-left">
+                <span class="text-xs font-black text-emerald-400 block">{{ b.base_price|int }} د.ج</span>
+                <span class="text-[9px] text-slate-500">سعر البداية</span>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4: CUSTOMER DETAILS & SCHEDULE -->
+      <div class="bg-slate-900 rounded-3xl border border-slate-800 p-4 sm:p-5 space-y-3">
+        <div class="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+          <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black flex items-center justify-center">4</span>
+          <h3 class="text-sm font-black text-white">بياناتك وموعد الحلاقة 📱</h3>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-300 mb-1">اسمك الكامل: *</label>
+              <input type="text" id="req-name" required placeholder="مثال: وليد بوعلام" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-300 mb-1">رقم الهاتف (للاتصال بك): *</label>
+              <input type="tel" id="req-phone" required placeholder="0550112233" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-300 mb-1">الموعد المرغوب: *</label>
+              <select id="req-timing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                <option value="الآن (فوري)">⚡ الآن (فوري - بأسرع وقت)</option>
+                <option value="اليوم بعد ساعة">اليوم بعد ساعة</option>
+                <option value="مساء اليوم (18:00 - 20:00)">مساء اليوم (18:00 - 20:00)</option>
+                <option value="الليلة (20:00 - 22:00)">الليلة (20:00 - 22:00)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-300 mb-1">طريقة الدفع: *</label>
+              <select id="req-payment" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                <option value="cash">💵 نقداً (كاش عند الانتهاء)</option>
+                <option value="baridimob">📱 بريدي موب (BaridiMob RIP)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">ملاحظات إضافية للحلاق (اختياري):</label>
+            <input type="text" id="req-notes" placeholder="مثال: الباب مفتوح مباشرة، أو حلاقة لشخص مسن، يرجى إحضار كولونيا خاصة..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- ALERT MESSAGE BOX -->
+      <div id="request-alert" class="hidden p-3 rounded-2xl text-xs font-bold"></div>
+
+      <!-- SUBMIT BUTTON -->
+      <button 
+        type="submit" 
+        id="submit-request-btn" 
+        class="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 transform active:scale-[0.99]"
+      >
+        <span>🛵</span>
+        <span>تأكيد الطلب والبحث عن حلاق الآن</span>
+        <span>←</span>
+      </button>
+
+    </form>
+
+  </main>
+
+  <!-- CLIENT SCRIPT -->
+  <script>
+    let currentSelectedPrice = 1500;
+    let currentServiceName = 'باقة VIP متكاملة (شعر + لحية + تنظيف بشرة)';
+
+    function selectCommune(name) {
+      document.getElementById('req-commune').value = name;
+      // Highlight active chip
+      document.querySelectorAll('.commune-chip').forEach(btn => {
+        if (btn.innerText.trim() === name) {
+          btn.className = 'commune-chip px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black transition text-[11px] shadow';
+        } else {
+          btn.className = 'commune-chip px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 transition text-[11px] font-bold';
+        }
+      });
+    }
+
+    function detectUserLocation() {
+      const btn = document.getElementById('gps-btn');
+      const txt = document.getElementById('gps-text');
+      const icon = document.getElementById('gps-icon');
+
+      if (!navigator.geolocation) {
+        alert("تحديد الموقع غير مدعوم في متصفحك، يرجى اختيار البلدية من القائمة.");
+        return;
+      }
+
+      txt.innerText = "جاري تحديد موقعك عبر GPS... ⏳";
+      icon.innerText = "📡";
+      btn.disabled = true;
+
+      const onLocationSuccess = (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        
+        let matchedCommune = "باب الزوار";
+        if (lon < 3.02) {
+          matchedCommune = (lat > 36.73) ? "الشراقة" : "درارية";
+        } else if (lon > 3.16) {
+          matchedCommune = (lon > 3.20) ? "الدار البيضاء" : "باب الزوار";
+        } else {
+          matchedCommune = "دالي ابراهيم";
+        }
+
+        selectCommune(matchedCommune);
+        const addrInput = document.getElementById('req-address');
+        if (addrInput) {
+          addrInput.value = `موقع عبر GPS (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        }
+        
+        txt.innerText = `تم تحديد: ${matchedCommune} ✔`;
+        icon.innerText = "📍";
+        btn.className = "px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-[10px] font-bold transition flex items-center gap-1";
+        btn.disabled = false;
+      };
+
+      const onLocationFallback = (err) => {
+        navigator.geolocation.getCurrentPosition(
+          onLocationSuccess,
+          (err2) => {
+            txt.innerText = "تعذر الجلب - يرجى تشغيل موقع الهاتف (GPS) أو اختيار بلدية";
+            icon.innerText = "📍";
+            btn.disabled = false;
+          },
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+        );
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        onLocationSuccess,
+        onLocationFallback,
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 }
+      );
+    }
+
+    function updateSelectedService(radio) {
+      currentServiceName = radio.value;
+      currentSelectedPrice = parseFloat(radio.dataset.price) || 1200;
+      document.getElementById('total-price-display').innerText = currentSelectedPrice;
+
+      // Update styling
+      document.querySelectorAll('.service-card').forEach(card => {
+        card.classList.remove('border-emerald-500', 'border-2', 'bg-slate-950/80');
+        card.classList.add('border-slate-800', 'bg-slate-950/60');
+      });
+      radio.closest('.service-card').classList.add('border-emerald-500', 'border-2', 'bg-slate-950/80');
+    }
+
+    function toggleMatchingMode(mode) {
+      const specificContainer = document.getElementById('specific-barbers-container');
+      const cards = document.querySelectorAll('.matching-card');
+      
+      cards.forEach(card => {
+        card.classList.remove('border-emerald-500', 'border-2', 'bg-slate-950/80');
+        card.classList.add('border-slate-800', 'bg-slate-950/60');
+      });
+
+      if (mode === 'broadcast') {
+        specificContainer.classList.add('hidden');
+        cards[0].classList.add('border-emerald-500', 'border-2', 'bg-slate-950/80');
+      } else {
+        specificContainer.classList.remove('hidden');
+        cards[1].classList.add('border-emerald-500', 'border-2', 'bg-slate-950/80');
+      }
+    }
+
+    let pendingPayload = null;
+
+    function submitHomeRequest(e) {
+      e.preventDefault();
+
+      const matchingMode = document.querySelector('input[name="matching_mode"]:checked').value;
+      let assignedBarberId = null;
+
+      if (matchingMode === 'specific') {
+        const specificBarber = document.querySelector('input[name="specific_barber_id"]:checked');
+        if (!specificBarber) {
+          alert('يرجى اختيار الحلاق المفضل من القائمة أو اختيار وضع "الطلب الفوري السريع".');
+          return;
+        }
+        assignedBarberId = specificBarber.value;
+      }
+
+      pendingPayload = {
+        customer_name: document.getElementById('req-name').value.trim(),
+        customer_phone: document.getElementById('req-phone').value.trim(),
+        wilaya: document.getElementById('req-wilaya').value.trim(),
+        commune: document.getElementById('req-commune').value.trim(),
+        address_details: document.getElementById('req-address').value.trim(),
+        service_type: currentServiceName,
+        price: currentSelectedPrice,
+        barber_id: assignedBarberId,
+        scheduled_at: document.getElementById('req-timing').value,
+        notes: document.getElementById('req-notes').value.trim(),
+        payment_method: document.getElementById('req-payment').value
+      };
+
+      // Open Customer Phone OTP Verification Modal
+      document.getElementById('otp-phone-display').textContent = pendingPayload.customer_phone;
+      document.getElementById('otp-modal').classList.remove('hidden');
+    }
+
+    function closeOtpModal() {
+      document.getElementById('otp-modal').classList.add('hidden');
+    }
+
+    async function confirmOtpAndSubmit() {
+      const code = document.getElementById('otp-input').value.trim();
+      const errBox = document.getElementById('otp-err');
+      const btn = document.getElementById('otp-submit-btn');
+
+      if (!code) {
+        errBox.textContent = 'يرجى إدخال رمز التحقق';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span> جاري التحقق وتأكيد الطلب...';
+
+      try {
+        const res = await fetch('/api/freelance/request/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingPayload)
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          closeOtpModal();
+          const alertBox = document.getElementById('request-alert');
+          alertBox.className = 'p-3 rounded-2xl text-xs font-bold bg-emerald-950/90 border border-emerald-500 text-emerald-300 block';
+          alertBox.innerHTML = `🎉 تم توثيق رقمك بنجاح! جاري تحويلك للمتابعة الحية...`;
+          
+          setTimeout(() => {
+            window.location.href = `/freelance/track/${data.request_id}`;
+          }, 1000);
+        } else {
+          errBox.textContent = data.error || 'تعذر إرسال الطلب، تأكد من صحة البيانات';
+          errBox.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<span>🛵</span> <span>تأكيد الحجز النهائي والانطلاق</span>';
+        }
+      } catch (err) {
+        errBox.textContent = 'خطأ في الاتصال بالخادم: ' + err.message;
+        errBox.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🛵</span> <span>تأكيد الحجز النهائي والانطلاق</span>';
+      }
+    }
+  </script>
+
+  <!-- MODAL: CUSTOMER PHONE OTP VERIFICATION -->
+  <div id="otp-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-4">
+      <button onclick="closeOtpModal()" class="absolute top-4 left-4 text-slate-400 hover:text-white text-xl w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center transition">
+        ✕
+      </button>
+
+      <div class="text-center space-y-2">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-2xl mx-auto">
+          📲
+        </div>
+        <h3 class="text-base font-black text-white">تأكيد رقم الهاتف (Anti-Prank)</h3>
+        <p class="text-xs text-slate-400">
+          لمنع الطلبات الوهمية وحماية الحلاقين، يرجى تأكيد رقمك:
+          <span id="otp-phone-display" class="font-bold text-emerald-400 font-mono block mt-1"></span>
+        </p>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1.5 text-center">رمز التأكيد السريع:</label>
+          <input type="text" id="otp-input" maxlength="6" value="2026" placeholder="••••" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-center text-lg font-mono tracking-widest text-emerald-400 outline-none transition">
+          <p class="text-[10px] text-slate-500 text-center mt-1">رمز الاختبار السريع: <span class="text-emerald-400 font-mono">2026</span></p>
+        </div>
+
+        <div id="otp-err" class="hidden p-2 rounded-xl bg-rose-950/80 border border-rose-500/50 text-rose-300 text-xs font-bold text-center"></div>
+
+        <button onclick="confirmOtpAndSubmit()" id="otp-submit-btn" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2">
+          <span>🛵</span>
+          <span>تأكيد الحجز النهائي والانطلاق</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+    <!-- NATIVE CLIENT BOTTOM NAVIGATION BAR (4 TABS) -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/90 px-4 py-2 flex items-center justify-around max-w-lg mx-auto sm:rounded-t-3xl shadow-2xl">
+    <a href="/portal" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">🏠</span>
+      <span>الرئيسية</span>
+    </a>
+    <a href="/explore" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">💈</span>
+      <span>الصالونات</span>
+    </a>
+    <a href="/freelance/request" class="flex flex-col items-center gap-0.5 text-emerald-400 font-black scale-105 transition text-[11px]">
+      <span class="text-lg">🛵</span>
+      <span>حلاق للدار</span>
+    </a>
+    <a href="/login" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">👤</span>
+      <span>حسابي</span>
+    </a>
+  </nav>
+
+
+<script>
+  // Mobile Resilience Engine: Keyboard Auto-Hide & Sleep-Mode Auto-Sync
+  (function() {
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function() {
+        var nav = document.querySelector('nav.fixed.bottom-0');
+        if (nav) {
+          if (window.visualViewport.height < window.innerHeight * 0.78) {
+            nav.classList.add('hidden');
+          } else {
+            nav.classList.remove('hidden');
+          }
+        }
+      });
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        if (typeof loadBarberData === 'function') loadBarberData();
+        if (typeof fetchQueueData === 'function') fetchQueueData();
+        if (typeof initSSE === 'function') initSSE();
+        if (typeof updateCrowdMetrics === 'function') updateCrowdMetrics();
+        if (typeof renderChairsBay === 'function') renderChairsBay();
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
