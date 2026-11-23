@@ -40,9 +40,15 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static"), 
     template_folder=os.path.join(BASE_DIR, "templates")
 )
-app.config['SECRET_KEY'] = 'barber-queue-dz-secret-2026'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'barber-queue-dz-secret-2026')
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
+
+@app.after_request
+def add_performance_headers(response):
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
 
 # Auto-initialize database tables on boot (Gunicorn / Serverless / Local)
 try:
