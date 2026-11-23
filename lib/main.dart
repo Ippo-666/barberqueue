@@ -289,10 +289,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       final androidController = controller.platform as AndroidWebViewController;
       androidController.setGeolocationPermissionsPromptCallbacks(
         onShowPrompt: (request) async {
-          return const GeolocationPermissionsResponse(
-            allow: true,
-            retain: true,
-          );
+          // التأكد من منح صلاحية الموقع على مستوى نظام الأندرويد
+          var status = await Permission.location.status;           if (!status.isGranted) {             status = await Permission.location.request();           }           return GeolocationPermissionsResponse(             allow: status.isGranted,             retain: true,           );
         },
       );
     }
