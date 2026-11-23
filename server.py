@@ -84,17 +84,24 @@ class EventBroadcaster:
 broadcaster = EventBroadcaster()
 
 
+_cached_local_ip = None
+
 def get_local_ip() -> str:
+    global _cached_local_ip
+    if _cached_local_ip is not None:
+        return _cached_local_ip
     try:
         import socket
         hostname = socket.gethostname()
         ips = socket.gethostbyname_ex(hostname)[2]
         local_ips = [ip for ip in ips if not ip.startswith('127.') and ':' not in ip]
         if local_ips:
-            return local_ips[0]
+            _cached_local_ip = local_ips[0]
+            return _cached_local_ip
     except Exception:
         pass
-    return "127.0.0.1"
+    _cached_local_ip = "127.0.0.1"
+    return _cached_local_ip
 
 
 # -------------------------------------------------------------
@@ -2188,40 +2195,66 @@ def marketplace_home():
     conn = get_db_connection()
     salons_raw = conn.execute("SELECT * FROM salons WHERE status = 'open'").fetchall()
     salons_list = []
-    for s in salons_raw:
-        s_dict = dict(s)
-        waiting_count = conn.execute(
-            "SELECT count(*) FROM queue_tickets WHERE salon_id = ? AND status IN ('waiting', 'turn_notified', 'arrived')",
-            (s['id'],)
-        ).fetchone()[0]
-        services = conn.execute(
-            "SELECT name, price FROM services WHERE salon_id = ? AND is_active = 1 LIMIT 3",
-            (s['id'],)
-        ).fetchall()
-        s_dict['waiting_count'] = waiting_count
-        s_dict['est_wait_minutes'] = waiting_count * 18
-        s_dict['services'] = [dict(srv) for srv in services]
+    if salons_raw:
+        counts_map = {}
+        try:
+            counts_rows = conn.execute("""
+                SELECT salon_id, count(*) as cnt 
+                FROM queue_tickets 
+                WHERE status IN ('waiting', 'turn_notified', 'arrived')
+                GROUP BY salon_id
+            """).fetchall()
+            for r in counts_rows:
+                counts_map[r['salon_id']] = r['cnt']
+        except Exception:
+            pass
 
-        # Parse Amenities
-        amenities_raw = s_dict.get('amenities')
-        if amenities_raw:
-            try:
-                s_dict['amenities_list'] = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
-            except Exception:
-                s_dict['amenities_list'] = ['clima', 'baridimob', 'coffee', 'parking', 'sanitized']
-        else:
-            s_dict['amenities_list'] = ['clima', 'baridimob', 'coffee', 'parking', 'sanitized']
+        services_map = {}
+        try:
+            srv_rows = conn.execute("""
+                SELECT salon_id, name, price 
+                FROM services 
+                WHERE is_active = 1
+                ORDER BY price ASC
+            """).fetchall()
+            for srv in srv_rows:
+                sid = srv['salon_id']
+                if sid not in services_map:
+                    services_map[sid] = []
+                if len(services_map[sid]) < 3:
+                    services_map[sid].append(dict(srv))
+        except Exception:
+            pass
 
-        # Google Maps search URL
-        maps_target = s_dict.get('maps_query') or f"{s_dict.get('name', '')} {s_dict.get('commune', '')} {s_dict.get('wilaya', '')}"
         import urllib.parse
-        s_dict['maps_url'] = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(maps_target)}"
+        for s in salons_raw:
+            s_dict = dict(s)
+            sid = s['id']
+            waiting_count = counts_map.get(sid, 0)
+            services = services_map.get(sid, [])
+            s_dict['waiting_count'] = waiting_count
+            s_dict['est_wait_minutes'] = waiting_count * 18
+            s_dict['services'] = services
 
-        # Reviews fallback
-        s_dict['rating'] = s_dict.get('rating') or 4.9
-        s_dict['reviews_count'] = s_dict.get('reviews_count') or 85
+            # Parse Amenities
+            amenities_raw = s_dict.get('amenities')
+            if amenities_raw:
+                try:
+                    s_dict['amenities_list'] = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+                except Exception:
+                    s_dict['amenities_list'] = ['clima', 'baridimob', 'coffee', 'parking', 'sanitized']
+            else:
+                s_dict['amenities_list'] = ['clima', 'baridimob', 'coffee', 'parking', 'sanitized']
 
-        salons_list.append(s_dict)
+            # Google Maps search URL
+            maps_target = s_dict.get('maps_query') or f"{s_dict.get('name', '')} {s_dict.get('commune', '')} {s_dict.get('wilaya', '')}"
+            s_dict['maps_url'] = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(maps_target)}"
+
+            # Reviews fallback
+            s_dict['rating'] = s_dict.get('rating') or 4.9
+            s_dict['reviews_count'] = s_dict.get('reviews_count') or 85
+
+            salons_list.append(s_dict)
     conn.close()
     return render_template("explore.html", salons=salons_list, local_ip=get_local_ip())
 
