@@ -94,6 +94,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v1.0.2-${{ github.run_number }}" BarberQueue.apk \
-            --title "BarberQueue Android App v1.0.2" \
-            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.2: دعم كامل لقاعدة بيانات PostgreSQL الدائمة (Neon)، تحديث خادم gthread للـ SSE، حماية زر الرجوع PopScope، تكامل الواتساب والـ GPS، وتحسينات شاشات الهاتف." || true
+          gh release create "v1.0.3-${{ github.run_number }}" BarberQueue.apk \
+            --title "BarberQueue Android App v1.0.3" \
+            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.3: إذن تحديد الموقع GPS التلقائي في WebView، شريط تحميل علوي تفاعلي LinearProgressIndicator، سرعة استجابة فائقة بفضل Connection Pooling لـ Neon PostgreSQL، خادم بـ 30 مسار معالجة (Threads)، التخزين المؤقت Cache-Control، وتحسينات الواجهة لشاشات الهاتف." || true
