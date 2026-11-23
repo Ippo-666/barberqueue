@@ -95,6 +95,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v1.0.6-${{ github.run_number }}" BarberQueue.apk \
-            --title "BarberQueue Android App v1.0.6 (Dorek)" \
-            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.6: تحميل مسبق فوري لجميع التبويبات في الخلفية (Pre-warmed IndexedStack)، حذف شريط التحميل البرتقالي نهائياً لتجربة تطبيق أصلي فخم، تبديل لحظي حقيقي (0ms) بين الشاشات، وربط البطاقات الداخلية بالتبويبات مباشرة." || true
+          gh release create "v1.0.7-${{ github.run_number }}" BarberQueue.apk \
+            --title "BarberQueue Android App v1.0.7 (Dorek)" \
+            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.7:
+          1. معالجة الشاشة السوداء عند فتح التطبيق والتنقل: واجهة تحميل أصلية داكنة راقية تمنع أي فراغ أسود وتؤكد للمستخدم جاري التحميل فورياً.
+          2. التحميل التدريجي الذكي (Sequential Pre-warming): تخصيص كامل سرعة الـ 4G للتبويب المعروض أولاً ثم باقي التبويبات تباعاً بدون بطء، مع حفظها في الذاكرة لتنقل فوري 0ms.
+          3. إصلاح خطأ السيرفر 500 في صفحة تتبع الحلاق: توافق تام بين Neon PostgreSQL وتنسيق التاريخ والجلسات.
+          4. حذف الشريط البرتقالي المتكرر نهائياً وتزامن الشريط السفلي الأصلي مع كل صفحة." || true
