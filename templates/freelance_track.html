@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>متابعة طلب الحلاق المباشرة #{{ req.id }} - دورك</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Tajawal', sans-serif; -webkit-tap-highlight-color: transparent; }
+    @keyframes radar-pulse {
+      0% { transform: scale(0.9); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.7; }
+      100% { transform: scale(0.9); opacity: 1; }
+    }
+    .radar-anim { animation: radar-pulse 2s infinite ease-in-out; }
+    @keyframes drive-shake {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(-4px); }
+    }
+    .drive-anim { animation: drive-shake 1.5s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-[#0B0F19] text-slate-100 min-h-screen pb-20 antialiased flex flex-col items-center">
+
+  <!-- TOP APP BAR -->
+  <header class="w-full max-w-xl bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/20">
+        🛵
+      </div>
+      <div>
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-sm font-black text-white leading-tight">متابعة طلب الحلاق المتنقل</h1>
+          <span class="text-[9px] bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.2 rounded-full font-mono font-bold">#{{ req.id[:12] }}</span>
+        </div>
+        <p class="text-[10px] text-slate-400">تحديث لحظي مباشر (Real-Time Sync)</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="/portal" class="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 px-2.5 py-1.5 rounded-xl border border-slate-700 transition font-bold flex items-center gap-1">
+        <span>🔄</span>
+        <span>الصفة</span>
+      </a>
+      <a href="/explore" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded-xl border border-slate-700 transition font-bold" title="دليل صالونات الحلاقة">
+        💈
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="w-full max-w-xl px-4 py-4 space-y-4">
+
+    <!-- 1. LIVE STATUS HERO CARD -->
+    <div id="status-hero-card" class="p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4 relative overflow-hidden transition-all">
+      
+      <!-- Status Badge & Icon -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="status-icon-box" class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg transition-all 
+            {% if req.status == 'pending' %}
+              bg-amber-500/10 border border-amber-500/30 text-amber-400 radar-anim
+            {% elif req.status == 'accepted' %}
+              bg-emerald-500/10 border border-emerald-500/30 text-emerald-400
+            {% elif req.status == 'on_the_way' %}
+              bg-sky-500/10 border border-sky-500/30 text-sky-400 drive-anim
+            {% elif req.status == 'completed' %}
+              bg-teal-500/10 border border-teal-500/30 text-teal-400
+            {% else %}
+              bg-rose-500/10 border border-rose-500/30 text-rose-400
+            {% endif %}
+          ">
+            {% if req.status == 'pending' %}⏳
+            {% elif req.status == 'accepted' %}✅
+            {% elif req.status == 'on_the_way' %}🛵
+            {% elif req.status == 'completed' %}👑
+            {% else %}✕{% endif %}
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold block">حالة الطلب الحالية:</span>
+            <h2 id="status-title-text" class="text-base sm:text-lg font-black text-white leading-tight">
+              {% if req.status == 'pending' %}جاري البحث عن حلاق متصل في منطقتك...
+              {% elif req.status == 'accepted' %}تم قبول طلبك! الحلاق يجهز عتاده
+              {% elif req.status == 'on_the_way' %}الحلاق في الطريق إليك الآن 🛵
+              {% elif req.status == 'completed' %}تمت الحلاقة بنجاح! نعيماً ✂️
+              {% elif req.status == 'cancelled' %}تم إلغاء الطلب
+              {% endif %}
+            </h2>
+          </div>
+        </div>
+
+        <span id="status-pill-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full border
+          {% if req.status == 'pending' %}bg-amber-500/20 text-amber-300 border-amber-500/40
+          {% elif req.status == 'accepted' %}bg-emerald-500/20 text-emerald-300 border-emerald-500/40
+          {% elif req.status == 'on_the_way' %}bg-sky-500/20 text-sky-300 border-sky-500/40
+          {% elif req.status == 'completed' %}bg-teal-500/20 text-teal-300 border-teal-500/40
+          {% else %}bg-rose-500/20 text-rose-300 border-rose-500/40{% endif %}
+        ">
+          {% if req.status == 'pending' %}قيد البحث ⏳
+          {% elif req.status == 'accepted' %}مقبول ✅
+          {% elif req.status == 'on_the_way' %}في الطريق 🛵
+          {% elif req.status == 'completed' %}منجز 💵
+          {% else %}ملغى ✕{% endif %}
+        </span>
+      </div>
+
+      <!-- PROGRESS STEPPER (4 STEPS) -->
+      <div class="pt-2">
+        <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">
+          
+          <!-- Step 1 -->
+          <div class="space-y-1">
+            <div id="step-dot-1" class="h-2 rounded-full bg-emerald-500"></div>
+            <span class="text-emerald-400">1. إرسال الطلب</span>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="space-y-1">
+            <div id="step-dot-2" class="h-2 rounded-full {% if req.status in ['accepted', 'on_the_way', 'completed'] %}bg-emerald-500{% else %}bg-slate-800{% endif %}"></div>
+            <span id="step-text-2" class="{% if req.status in ['accepted', 'on_the_way', 'completed'] %}text-emerald-400{% else %}text-slate-500{% endif %}">2. قبول الحلاق</span>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="space-y-1">
+            <div id="step-dot-3" class="h-2 rounded-full {% if req.status in ['on_the_way', 'completed'] %}bg-sky-500{% else %}bg-slate-800{% endif %}"></div>
+            <span id="step-text-3" class="{% if req.status in ['on_the_way', 'completed'] %}text-sky-400{% else %}text-slate-500{% endif %}">3. في الطريق</span>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="space-y-1">
+            <div id="step-dot-4" class="h-2 rounded-full {% if req.status == 'completed' %}bg-teal-500{% else %}bg-slate-800{% endif %}"></div>
+            <span id="step-text-4" class="{% if req.status == 'completed' %}text-teal-400{% else %}text-slate-500{% endif %}">4. نعيماً ✂️</span>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. ASSIGNED BARBER CARD (SHOWN WHEN ACCEPTED / ON THE WAY / COMPLETED) -->
+    <div id="barber-assigned-card" class="{% if not barber %}hidden{% endif %} bg-slate-900 rounded-3xl border border-emerald-500/40 p-4 sm:p-5 space-y-3.5 shadow-xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-3">
+          <div id="barber-vehicle-avatar" class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-2xl">
+            {% if barber and barber.vehicle_type == 'car' %}🚗{% else %}🛵{% endif %}
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <h3 id="barber-name-text" class="text-sm font-black text-white">{{ barber.name if barber else '' }}</h3>
+              <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded-full font-bold">🛡️ موثق بالهوية الوطنية</span>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+              <span id="barber-rating-text" class="text-amber-400 font-bold">⭐ {{ barber.rating if barber else '4.95' }}</span>
+              <span>•</span>
+              <span id="barber-commune-text">{{ barber.commune if barber else '' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <span class="text-xs font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+          الحلاق المكلف ✂️
+        </span>
+      </div>
+
+      <!-- Quick Actions: Direct Call & 1-Tap WhatsApp with Location -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <a 
+          id="barber-phone-link" 
+          href="tel:{{ barber.phone if barber else '' }}" 
+          class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-black text-xs rounded-2xl transition flex items-center justify-center gap-2"
+        >
+          <span>📞</span>
+          <span>اتصال هاتف (<span id="barber-phone-text">{{ barber.phone if barber else '' }}</span>)</span>
+        </a>
+
+        <a 
+          id="barber-whatsapp-link" 
+          target="_blank"
+          href="https://wa.me/213{{ barber.phone[1:] if barber and barber.phone.startswith('0') else (barber.phone if barber else '') }}?text={{ ('سلام عليكم خويا ' + (barber.name if barber else '') + '، أنا ' + req.customer_name + '، طلبت خدمة: ' + req.service_type + ' للعنوان: ' + req.address_details + ' (' + req.commune + ') موقعي: https://www.google.com/maps/search/?api=1&query=' + (req.commune|urlencode) + '+' + (req.address_details|urlencode))|urlencode }}" 
+          class="w-full py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs rounded-2xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+        >
+          <span class="text-base">💬</span>
+          <span>مراسلة واتساب ومشاركة موقعك</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 3. RATING WIDGET (ONLY SHOWN IF COMPLETED) -->
+    <div id="rating-box" class="{% if req.status != 'completed' %}hidden{% endif %} bg-gradient-to-br from-slate-900 to-amber-950/40 rounded-3xl border border-amber-500/40 p-4 sm:p-5 space-y-3">
+      <div class="text-center space-y-1">
+        <span class="text-2xl">🌟</span>
+        <h3 class="text-sm font-black text-white">كيف كانت جلسة الحلاقة؟</h3>
+        <p class="text-xs text-slate-400">تقييمك يساعدنا في الحفاظ على أعلى معايير النظافة والاحترافية</p>
+      </div>
+
+      <div class="flex items-center justify-center gap-2 py-2 text-2xl">
+        <button type="button" onclick="setRating(1)" class="star-btn transition transform hover:scale-125 text-amber-400">⭐</button>
+        <button type="button" onclick="setRating(2)" class="star-btn transition transform hover:scale-125 text-amber-400">⭐</button>
+        <button type="button" onclick="setRating(3)" class="star-btn transition transform hover:scale-125 text-amber-400">⭐</button>
+        <button type="button" onclick="setRating(4)" class="star-btn transition transform hover:scale-125 text-amber-400">⭐</button>
+        <button type="button" onclick="setRating(5)" class="star-btn transition transform hover:scale-125 text-amber-400">⭐</button>
+      </div>
+
+      <div class="space-y-2">
+        <textarea id="review-comment" rows="2" placeholder="اكتب كلمة عن جودة الحلاقة ونظافة العتاد والمعاملة (اختياري)..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-500"></textarea>
+        
+        <button onclick="submitReview('{{ req.id }}')" id="submit-review-btn" class="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition">
+          إرسال التقييم ⭐
+        </button>
+      </div>
+
+      <div id="review-alert" class="hidden p-2 rounded-xl text-xs font-bold text-center"></div>
+    </div>
+
+    <!-- 4. ORDER SUMMARY CARD -->
+    <div class="bg-slate-900 rounded-3xl border border-slate-800 p-4 sm:p-5 space-y-3 text-xs">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <h3 class="font-black text-white flex items-center gap-1.5">
+          <span>📋</span>
+          <span>تفاصيل الحجز والخدمة</span>
+        </h3>
+        <span class="font-mono text-slate-400">{{ (req.created_at|string)[:16] }}</span>
+      </div>
+
+      <div class="space-y-2 text-slate-300">
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <span class="text-slate-400">صاحب الطلب:</span>
+          <span class="font-black text-white">{{ req.customer_name }} <span class="text-slate-400 font-mono text-[11px]">({{ req.customer_phone }})</span></span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <span class="text-slate-400">الخدمة المطلوبة:</span>
+          <span class="font-black text-white">{{ req.service_type }}</span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <span class="text-slate-400">المبلغ الإجمالي:</span>
+          <span class="font-black text-emerald-400 text-sm">{{ req.price|int }} د.ج</span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <span class="text-slate-400">طريقة الدفع:</span>
+          <span class="font-bold text-slate-200">
+            {% if req.payment_method == 'baridimob' %}📱 بريدي موب (BaridiMob RIP){% else %}💵 نقداً (كاش عند الانتهاء){% endif %}
+          </span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <span class="text-slate-400">الموعد المحدد:</span>
+          <span class="font-bold text-amber-400">{{ req.scheduled_at }}</span>
+        </div>
+
+        <div class="flex items-start justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+          <span class="text-slate-400 shrink-0 ml-2">عنوان الحلاقة:</span>
+          <span class="font-bold text-white text-left">{{ req.address_details }} ({{ req.commune }})</span>
+        </div>
+
+        {% if req.notes %}
+        <div class="flex items-start justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 text-[11px]">
+          <span class="text-slate-400 shrink-0 ml-2">ملاحظاتك:</span>
+          <span class="text-slate-300 text-left">{{ req.notes }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 5. QUICK ACTIONS FOOTER -->
+    <div class="flex items-center justify-between gap-3 pt-2 text-xs">
+      <a href="/freelance/request" class="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl border border-slate-700 transition flex items-center justify-center gap-1.5">
+        <span>➕</span>
+        <span>طلب حلاقة جديد</span>
+      </a>
+      <a href="/portal" class="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold rounded-2xl border border-slate-800 transition flex items-center justify-center gap-1.5">
+        <span>🔄</span>
+        <span>الصفة</span>
+      </a>
+    </div>
+
+  </main>
+
+  <!-- CLIENT REAL-TIME SCRIPT -->
+  <script>
+    const REQUEST_ID = "{{ req.id }}";
+    let selectedRating = 5;
+
+    // Connect to Real-time SSE
+    const evtSource = new EventSource("/api/stream");
+    
+    evtSource.onmessage = function(e) {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload.event === "home_request_updated" && payload.data.request_id === REQUEST_ID) {
+          handleStatusUpdate(payload.data);
+        }
+      } catch (err) {
+        console.error("SSE parse error:", err);
+      }
+    };
+
+    function handleStatusUpdate(data) {
+      const status = data.status;
+      
+      // Update Title & Badge
+      const title = document.getElementById('status-title-text');
+      const badge = document.getElementById('status-pill-badge');
+      const iconBox = document.getElementById('status-icon-box');
+
+      if (status === 'accepted') {
+        title.innerText = "تم قبول طلبك! الحلاق يجهز عتاده للانطلاق";
+        badge.innerText = "مقبول ✅";
+        badge.className = "text-[11px] font-bold px-2.5 py-1 rounded-full border bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+        iconBox.innerHTML = "✅";
+        iconBox.className = "w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg transition-all bg-emerald-500/10 border border-emerald-500/30 text-emerald-400";
+        
+        document.getElementById('step-dot-2').className = "h-2 rounded-full bg-emerald-500";
+        document.getElementById('step-text-2').className = "text-emerald-400";
+
+        // Show barber card if provided
+        if (data.barber) {
+          showBarberCard(data.barber);
+        }
+      } else if (status === 'on_the_way') {
+        title.innerText = "الحلاق في الطريق إليك الآن 🛵";
+        badge.innerText = "في الطريق 🛵";
+        badge.className = "text-[11px] font-bold px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/40";
+        iconBox.innerHTML = "🛵";
+        iconBox.className = "w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg transition-all bg-sky-500/10 border border-sky-500/30 text-sky-400 drive-anim";
+
+        document.getElementById('step-dot-2').className = "h-2 rounded-full bg-emerald-500";
+        document.getElementById('step-text-2').className = "text-emerald-400";
+        document.getElementById('step-dot-3').className = "h-2 rounded-full bg-sky-500";
+        document.getElementById('step-text-3').className = "text-sky-400";
+
+        if (data.barber) {
+          showBarberCard(data.barber);
+        }
+      } else if (status === 'completed') {
+        title.innerText = "تمت الحلاقة بنجاح! نعيماً ✂️";
+        badge.innerText = "منجز 💵";
+        badge.className = "text-[11px] font-bold px-2.5 py-1 rounded-full border bg-teal-500/20 text-teal-300 border-teal-500/40";
+        iconBox.innerHTML = "👑";
+        iconBox.className = "w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg transition-all bg-teal-500/10 border border-teal-500/30 text-teal-400";
+
+        document.getElementById('step-dot-4').className = "h-2 rounded-full bg-teal-500";
+        document.getElementById('step-text-4').className = "text-teal-400";
+
+        // Show rating box
+        document.getElementById('rating-box').classList.remove('hidden');
+      }
+    }
+
+    function showBarberCard(barber) {
+      const card = document.getElementById('barber-assigned-card');
+      card.classList.remove('hidden');
+      document.getElementById('barber-name-text').innerText = barber.name;
+      document.getElementById('barber-rating-text').innerText = `⭐ ${barber.rating || '4.95'}`;
+      document.getElementById('barber-commune-text').innerText = barber.commune;
+      document.getElementById('barber-phone-text').innerText = barber.phone;
+      document.getElementById('barber-phone-link').href = `tel:${barber.phone}`;
+      document.getElementById('barber-vehicle-avatar').innerHTML = barber.vehicle_type === 'car' ? '🚗' : '🛵';
+
+      if (barber.phone) {
+        let cleanPhone = barber.phone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '213' + cleanPhone.substring(1);
+        const text = encodeURIComponent(`سلام عليكم خويا ${barber.name}، أنا صاحب الطلب للعنوان: {{ req.address_details }} ({{ req.commune }}). موقعي: https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('{{ req.commune }} {{ req.address_details }}')}`);
+        document.getElementById('barber-whatsapp-link').href = `https://wa.me/${cleanPhone}?text=${text}`;
+      }
+    }
+
+    function setRating(stars) {
+      selectedRating = stars;
+      const btns = document.querySelectorAll('.star-btn');
+      btns.forEach((btn, idx) => {
+        if (idx < stars) {
+          btn.style.opacity = '1';
+          btn.style.filter = 'grayscale(0%)';
+        } else {
+          btn.style.opacity = '0.3';
+          btn.style.filter = 'grayscale(100%)';
+        }
+      });
+    }
+
+    async function submitReview(requestId) {
+      const btn = document.getElementById('submit-review-btn');
+      const alertBox = document.getElementById('review-alert');
+      const comment = document.getElementById('review-comment').value.trim();
+
+      btn.disabled = true;
+      btn.innerText = 'جاري الإرسال... ⏳';
+
+      try {
+        const res = await fetch('/api/freelance/request/rate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            request_id: requestId,
+            rating: selectedRating,
+            review: comment
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alertBox.className = 'p-2 rounded-xl text-xs font-bold bg-emerald-950/80 border border-emerald-500 text-emerald-300 block';
+          alertBox.innerText = '🎉 شكراً جزيلاً على تقييمك! تم تسجيل رأيك بنجاح.';
+          btn.classList.add('hidden');
+        } else {
+          alertBox.className = 'p-2 rounded-xl text-xs font-bold bg-rose-950/80 border border-rose-500 text-rose-300 block';
+          alertBox.innerText = data.error || 'تعذر تسجيل التقييم';
+          btn.disabled = false;
+          btn.innerText = 'إرسال التقييم ⭐';
+        }
+      } catch (err) {
+        alertBox.className = 'p-2 rounded-xl text-xs font-bold bg-rose-950/80 border border-rose-500 text-rose-300 block';
+        alertBox.innerText = 'خطأ في الاتصال: ' + err.message;
+        btn.disabled = false;
+        btn.innerText = 'إرسال التقييم ⭐';
+      }
+    }
+  </script>
+
+    <!-- NATIVE CLIENT BOTTOM NAVIGATION BAR (4 TABS) -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/90 px-4 py-2 flex items-center justify-around max-w-lg mx-auto sm:rounded-t-3xl shadow-2xl">
+    <a href="/portal" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">🏠</span>
+      <span>الرئيسية</span>
+    </a>
+    <a href="/explore" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">💈</span>
+      <span>الصالونات</span>
+    </a>
+    <a href="/freelance/request" class="flex flex-col items-center gap-0.5 text-emerald-400 font-black scale-105 transition text-[11px]">
+      <span class="text-lg">🛵</span>
+      <span>حلاق للدار</span>
+    </a>
+    <a href="/login" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">👤</span>
+      <span>حسابي</span>
+    </a>
+  </nav>
+
+
+<script>
+  // Mobile Resilience Engine: Keyboard Auto-Hide & Sleep-Mode Auto-Sync
+  (function() {
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function() {
+        var nav = document.querySelector('nav.fixed.bottom-0');
+        if (nav) {
+          if (window.visualViewport.height < window.innerHeight * 0.78) {
+            nav.classList.add('hidden');
+          } else {
+            nav.classList.remove('hidden');
+          }
+        }
+      });
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        if (typeof loadBarberData === 'function') loadBarberData();
+        if (typeof fetchQueueData === 'function') fetchQueueData();
+        if (typeof initSSE === 'function') initSSE();
+        if (typeof updateCrowdMetrics === 'function') updateCrowdMetrics();
+        if (typeof renderChairsBay === 'function') renderChairsBay();
+      }
+    });
+  })();
+</script>
+
+</body>
+  </html>
