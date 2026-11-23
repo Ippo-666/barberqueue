@@ -99,11 +99,11 @@ class _SplashScreenState extends State<SplashScreen>
       await Permission.locationWhenInUse.request();
     } catch (_) {}
 
-    await Future.delayed(const Duration(milliseconds: 1400));
+    await Future.delayed(const Duration(milliseconds: 1300));
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 400),
+          transitionDuration: const Duration(milliseconds: 350),
           pageBuilder: (_, __, ___) => const WebViewScreen(),
           transitionsBuilder: (_, animation, __, child) =>
               FadeTransition(opacity: animation, child: child),
@@ -187,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // =========================================================================
-// 2. MAIN WEBVIEW SCREEN (INDEXED STACK + 4 LAZY LOADED CONTROLLERS + PULL TO REFRESH)
+// 2. MAIN WEBVIEW SCREEN (PRE-WARMED INDEXED STACK - ZERO LATENCY - NO ORANGE BAR)
 // =========================================================================
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -207,60 +207,39 @@ class _WebViewScreenState extends State<WebViewScreen> {
     '${AppConfig.baseUrl}/login',
   ];
 
-  // Lazy Loaded Controllers & State per Tab
+  // Pre-warmed Controllers & State per Tab
   final List<WebViewController?> _controllers = [null, null, null, null];
   final List<bool> _isTabLoaded = [false, false, false, false];
-  final List<bool> _isLoadingTab = [false, false, false, false];
-  final List<double> _progressTab = [0.0, 0.0, 0.0, 0.0];
   final List<bool> _hasErrorTab = [false, false, false, false];
   final List<String> _errorMsgTab = ['', '', '', ''];
 
   @override
   void initState() {
     super.initState();
-    // Initialize primary tab (/portal) immediately on boot
+    // Initialize primary tab (/portal) immediately
     _initTab(0);
+
+    // Pre-warm all other 3 tabs in parallel immediately in the background
+    // So when the user taps any tab, it is ALREADY loaded in memory (0ms switch)!
+    Future.microtask(() {
+      _initTab(1);
+      _initTab(2);
+      _initTab(3);
+    });
+
     _checkConnectivity();
   }
 
   void _initTab(int index) {
     if (_isTabLoaded[index]) return;
-
     _isTabLoaded[index] = true;
-    _isLoadingTab[index] = true;
-    _progressTab[index] = 0.15;
-    _hasErrorTab[index] = false;
 
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0F19))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onProgress: (int progress) {
-            if (mounted) {
-              setState(() {
-                _progressTab[index] = progress / 100.0;
-                if (progress >= 95) {
-                  _isLoadingTab[index] = false;
-                }
-              });
-            }
-          },
-          onPageStarted: (String url) {
-            if (mounted) {
-              setState(() {
-                _isLoadingTab[index] = true;
-                _hasErrorTab[index] = false;
-              });
-            }
-          },
           onPageFinished: (String url) {
-            if (mounted) {
-              setState(() {
-                _isLoadingTab[index] = false;
-                _progressTab[index] = 0.0;
-              });
-            }
             // إخفاء الشريط السفلي للويب داخل التطبيق الأصلي لتفادي التكرار
             _controllers[index]?.runJavaScript("""
               (function() {
@@ -275,23 +254,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
               if (mounted) {
                 setState(() {
                   _hasErrorTab[index] = true;
-                  _isLoadingTab[index] = false;
                   _errorMsgTab[index] = error.description;
                 });
               }
-            }
-            if (mounted && error.errorCode != -1) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'تعذر تحميل الصفحة: ${error.description}',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                  ),
-                  backgroundColor: const Color(0xFFE11D48),
-                  behavior: SnackBarBehavior.floating,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
             }
           },
           onNavigationRequest: (NavigationRequest request) {
@@ -319,36 +284,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
               return NavigationDecision.prevent;
             }
 
-            // 4. التوجيه الذكي بين التبويبات بدون إعادة تحميل (0ms Switching)
-            final path = uri.path;
+            // 4. التوجيه الفوري اللحظي بين التبويبات (0ms Switch بدون أي إعادة تحميل!)
+            final path = uri.path.toLowerCase();
             if (path == '/explore' || path == '/explore/') {
-              if (index != 1) {
-                _onTabTapped(1);
-                return NavigationDecision.prevent;
-              }
+              _switchToTab(1);
+              return NavigationDecision.prevent;
             } else if (path == '/freelance/request' || path == '/freelance/request/') {
-              if (index != 2) {
-                _onTabTapped(2);
-                return NavigationDecision.prevent;
-              }
-            } else if (path == '/portal' || path == '/portal/' || path == '/') {
-              if (index != 0) {
-                _onTabTapped(0);
-                return NavigationDecision.prevent;
-              }
+              _switchToTab(2);
+              return NavigationDecision.prevent;
+            } else if (path == '/portal' || path == '/portal/' || path == '' || path == '/') {
+              _switchToTab(0);
+              return NavigationDecision.prevent;
             } else if (path == '/login' || path == '/login/') {
-              if (index != 3) {
-                _onTabTapped(3);
-                return NavigationDecision.prevent;
-              }
-            }
-
-            // تنقل داخلي داخل نفس التبويب
-            if (mounted) {
-              setState(() {
-                _isLoadingTab[index] = true;
-                _progressTab[index] = 0.15;
-              });
+              _switchToTab(3);
+              return NavigationDecision.prevent;
             }
 
             return NavigationDecision.navigate;
@@ -378,29 +327,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
     controller.loadRequest(Uri.parse(_tabUrls[index]));
   }
 
+  void _switchToTab(int targetIndex) {
+    if (_currentIndex == targetIndex) return;
+    if (!_isTabLoaded[targetIndex]) {
+      _initTab(targetIndex);
+    }
+    setState(() {
+      _currentIndex = targetIndex;
+    });
+  }
+
   void _onTabTapped(int index) {
     if (_currentIndex == index) {
-      // إعادة الضغط على نفس التبويب يعيد التحديث يدوياً
+      // إعادة النقر على نفس التبويب تعيد التحديث يدوياً
       _reloadTab(index);
       return;
     }
-
-    // تحميل كسول (Lazy Loading): لا يُحمّل التبويب إلا عند أول طلب
-    if (!_isTabLoaded[index]) {
-      _initTab(index);
-    }
-
-    setState(() {
-      _currentIndex = index;
-    });
+    _switchToTab(index);
   }
 
   void _reloadTab(int index) {
     if (_controllers[index] != null) {
       setState(() {
-        _isLoadingTab[index] = true;
         _hasErrorTab[index] = false;
-        _progressTab[index] = 0.15;
       });
       _controllers[index]!.reload();
     }
@@ -497,7 +446,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           currentCtrl.goBack();
         } else if (_currentIndex != 0) {
           // العودة للتبويب الرئيسي (الرئيسية) قبل الخروج
-          _onTabTapped(0);
+          _switchToTab(0);
         } else {
           // تأكيد الخروج من التطبيق
           final shouldExit = await showDialog<bool>(
@@ -563,29 +512,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   // 2. Custom Native Offline / Error View
                   if (_hasErrorTab[index])
                     _buildErrorView(index),
-
-                  // 3. Top Progress Loading Bar (Amber 500)
-                  if (_isLoadingTab[index] && !_hasErrorTab[index])
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: LinearProgressIndicator(
-                        value: _progressTab[index] > 0 ? _progressTab[index] : null,
-                        backgroundColor: Colors.transparent,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFFF59E0B),
-                        ),
-                        minHeight: 3.0,
-                      ),
-                    ),
                 ],
               );
             }),
           ),
         ),
 
-        // 4. Native Bottom Navigation Bar (أصلي وسريع 0ms مع IndexedStack)
+        // 3. Native Bottom Navigation Bar (أصلي وسريع 0ms مع IndexedStack)
         bottomNavigationBar: Container(
           decoration: const BoxDecoration(
             color: Color(0xFF0F172A),
