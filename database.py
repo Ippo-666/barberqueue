@@ -15,6 +15,7 @@ import sqlite3
 import json
 import os
 import re
+import threading
 from datetime import datetime, date
 from typing import Dict, List, Optional, Any
 
@@ -224,7 +225,8 @@ class PostgresCursorWrapper:
 
 
 class PostgresConnectionWrapper:
-    def __init__(self, raw_conn):
+    def __init__(self, raw_conn, pool=None):
+        self._pool = pool
         self._conn = raw_conn
 
     def cursor(self):
@@ -247,7 +249,16 @@ class PostgresConnectionWrapper:
         self._conn.rollback()
 
     def close(self):
-        self._conn.close()
+        if self._pool is not None:
+            try:
+                self._pool.putconn(self._conn)
+                return
+            except Exception:
+                pass
+        try:
+            self._conn.close()
+        except Exception:
+            pass
 
     def __enter__(self):
         return self
@@ -264,6 +275,20 @@ def insert_and_get_id(conn, query: str, params=None):
     """Uniform helper to execute INSERT and return the inserted row id across both SQLite and PostgreSQL."""
     cur = conn.execute(query, params)
     return cur.lastrowid
+
+
+_pg_pool = None
+_pg_pool_lock = threading.Lock()
+
+
+def get_pg_pool(db_url, conn_args):
+    global _pg_pool
+    if _pg_pool is None or _pg_pool.closed:
+        with _pg_pool_lock:
+            if _pg_pool is None or _pg_pool.closed:
+                from psycopg2.pool import ThreadedConnectionPool
+                _pg_pool = ThreadedConnectionPool(minconn=1, maxconn=25, dsn=db_url, **conn_args)
+    return _pg_pool
 
 
 def get_db_connection():
@@ -292,25 +317,44 @@ def get_db_connection():
                 "connect_timeout": 10
             }
 
-            # Retry mechanism for Neon serverless cold start (Scale to Zero wake-up)
+            pool = get_pg_pool(db_url, conn_args)
             raw_conn = None
-            last_err = None
-            for attempt in range(2):
-                try:
-                    raw_conn = psycopg2.connect(db_url, **conn_args)
-                    break
-                except Exception as ex:
-                    last_err = ex
-                    import time
-                    time.sleep(1.2)
+            try:
+                raw_conn = pool.getconn()
+                if raw_conn.closed:
+                    raise psycopg2.OperationalError("Connection is closed")
+                # Quick health ping to ensure socket is alive
+                with raw_conn.cursor() as cur:
+                    cur.execute("SELECT 1;")
+            except Exception:
+                if raw_conn is not None:
+                    try:
+                        pool.putconn(raw_conn, close=True)
+                    except Exception:
+                        pass
+                # Retry obtaining a fresh connection
+                raw_conn = pool.getconn()
 
             if raw_conn is not None:
-                return PostgresConnectionWrapper(raw_conn)
-            else:
-                raise last_err
+                return PostgresConnectionWrapper(raw_conn, pool=pool)
 
         except Exception as e:
-            print(f"[Database Adapter] Warning: PostgreSQL connection failed ({e}), falling back to SQLite.")
+            print(f"[Database Adapter] Warning: PostgreSQL pool connection failed ({e}), falling back to direct connect or SQLite.")
+            try:
+                import psycopg2
+                from psycopg2.extras import RealDictCursor
+                conn_args = {
+                    "cursor_factory": RealDictCursor,
+                    "keepalives": 1,
+                    "keepalives_idle": 30,
+                    "keepalives_interval": 10,
+                    "keepalives_count": 5,
+                    "connect_timeout": 10
+                }
+                raw_conn = psycopg2.connect(db_url, **conn_args)
+                return PostgresConnectionWrapper(raw_conn)
+            except Exception as direct_e:
+                print(f"[Database Adapter] Fallback to SQLite: {direct_e}")
 
     # SQLite Local Fallback
     conn = sqlite3.connect(DB_PATH, timeout=15)
