@@ -95,6 +95,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v1.0.5-${{ github.run_number }}" BarberQueue.apk \
-            --title "BarberQueue Android App v1.0.5 (Dorek)" \
-            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.5: هندسة IndexedStack بتحميل كسول (Lazy Loading) لتبديل التبويبات فورياً في 0ms بدون إعادة تحميل وبدون شريط التحميل المتكرر، دعم السحب للأسفل للتحديث (Pull-to-Refresh)، نظام تحديد موقع حقيقي Real Reverse Geocoding عبر OpenStreetMap Nominatim و BigDataCloud لجميع بلديات الجزائر، وحفظ الإحداثيات الدقيقة لخرائط جوجل وواتساب." || true
+          gh release create "v1.0.6-${{ github.run_number }}" BarberQueue.apk \
+            --title "BarberQueue Android App v1.0.6 (Dorek)" \
+            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.6: تحميل مسبق فوري لجميع التبويبات في الخلفية (Pre-warmed IndexedStack)، حذف شريط التحميل البرتقالي نهائياً لتجربة تطبيق أصلي فخم، تبديل لحظي حقيقي (0ms) بين الشاشات، وربط البطاقات الداخلية بالتبويبات مباشرة." || true
