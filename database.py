@@ -226,8 +226,8 @@ class PostgresCursorWrapper:
 
 class PostgresConnectionWrapper:
     def __init__(self, raw_conn, pool=None):
-        self._pool = pool
         self._conn = raw_conn
+        self._pool = pool
 
     def cursor(self):
         return PostgresCursorWrapper(self._conn.cursor(), self._conn)
@@ -249,6 +249,12 @@ class PostgresConnectionWrapper:
         self._conn.rollback()
 
     def close(self):
+        if self._conn is not None:
+            try:
+                if not self._conn.closed:
+                    self._conn.rollback()
+            except Exception:
+                pass
         if self._pool is not None:
             try:
                 self._pool.putconn(self._conn)
@@ -256,7 +262,8 @@ class PostgresConnectionWrapper:
             except Exception:
                 pass
         try:
-            self._conn.close()
+            if self._conn is not None and not self._conn.closed:
+                self._conn.close()
         except Exception:
             pass
 
@@ -264,11 +271,13 @@ class PostgresConnectionWrapper:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is not None:
-            self.rollback()
-        else:
-            self.commit()
-        self.close()
+        try:
+            if exc_type is not None:
+                self.rollback()
+            else:
+                self.commit()
+        finally:
+            self.close()
 
 
 def insert_and_get_id(conn, query: str, params=None):
@@ -287,7 +296,7 @@ def get_pg_pool(db_url, conn_args):
         with _pg_pool_lock:
             if _pg_pool is None or _pg_pool.closed:
                 from psycopg2.pool import ThreadedConnectionPool
-                _pg_pool = ThreadedConnectionPool(minconn=1, maxconn=25, dsn=db_url, **conn_args)
+                _pg_pool = ThreadedConnectionPool(minconn=1, maxconn=16, dsn=db_url, **conn_args)
     return _pg_pool
 
 
@@ -314,32 +323,36 @@ def get_db_connection():
                 "keepalives_idle": 30,
                 "keepalives_interval": 10,
                 "keepalives_count": 5,
-                "connect_timeout": 10
+                "connect_timeout": 5
             }
 
+            # If the database URL is already pointing to Neon's cloud pooler (-pooler),
+            # connect directly through Neon's cloud PgBouncer for optimal latency without client pool deadlock
+            if "-pooler" in db_url:
+                raw_conn = psycopg2.connect(db_url, **conn_args)
+                return PostgresConnectionWrapper(raw_conn)
+
+            # Otherwise, use a safe ThreadedConnectionPool
             pool = get_pg_pool(db_url, conn_args)
             raw_conn = None
             try:
                 raw_conn = pool.getconn()
                 if raw_conn.closed:
                     raise psycopg2.OperationalError("Connection is closed")
-                # Quick health ping to ensure socket is alive
-                with raw_conn.cursor() as cur:
-                    cur.execute("SELECT 1;")
             except Exception:
                 if raw_conn is not None:
                     try:
                         pool.putconn(raw_conn, close=True)
                     except Exception:
                         pass
-                # Retry obtaining a fresh connection
-                raw_conn = pool.getconn()
+                raw_conn = psycopg2.connect(db_url, **conn_args)
+                return PostgresConnectionWrapper(raw_conn)
 
             if raw_conn is not None:
                 return PostgresConnectionWrapper(raw_conn, pool=pool)
 
         except Exception as e:
-            print(f"[Database Adapter] Warning: PostgreSQL pool connection failed ({e}), falling back to direct connect or SQLite.")
+            print(f"[Database Adapter] Warning: PostgreSQL connection failed ({e}), falling back to SQLite.")
             try:
                 import psycopg2
                 from psycopg2.extras import RealDictCursor
@@ -349,7 +362,7 @@ def get_db_connection():
                     "keepalives_idle": 30,
                     "keepalives_interval": 10,
                     "keepalives_count": 5,
-                    "connect_timeout": 10
+                    "connect_timeout": 5
                 }
                 raw_conn = psycopg2.connect(db_url, **conn_args)
                 return PostgresConnectionWrapper(raw_conn)
@@ -362,7 +375,6 @@ def get_db_connection():
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
-
 
 def init_db():
     """Initializes all database tables and seeds default Algerian barbershop data."""
@@ -665,7 +677,7 @@ def init_db():
     )
     """)
 
-    # 16. Freelancer Wallet Recharges Table (شحن رصيد الحلاق ببريدي موب)
+    # 16. Freelancer痕 Wallet Recharges Table (شحن رصيد الحلاق ببريدي موب)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_wallet_recharges (
         id TEXT PRIMARY KEY,
