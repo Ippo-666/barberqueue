@@ -2003,6 +2003,8 @@ def get_home_service_request(request_id):
         conn.close()
         return jsonify({"error": "Request not found"}), 404
     req_dict = dict(req)
+    if req_dict.get("created_at"):
+        req_dict["created_at"] = str(req_dict["created_at"])
     barber_dict = None
     if req_dict.get("barber_id"):
         b_row = conn.execute("SELECT * FROM freelance_barbers WHERE id = ?", (req_dict["barber_id"],)).fetchone()
@@ -2077,7 +2079,12 @@ def create_home_service_request():
     conn.close()
 
     broadcaster.broadcast("home_request_created", {"request_id": req_id, "commune": commune, "service_type": service_type})
-    return jsonify({"success": True, "request_id": req_id, "request": dict(created)})
+    created_dict = dict(created) if created else {}
+    if created_dict.get("created_at"):
+        created_dict["created_at"] = str(created_dict["created_at"])
+
+    broadcaster.broadcast("home_request_created", {"request_id": req_id, "commune": commune, "service_type": service_type})
+    return jsonify({"success": True, "request_id": req_id, "request": created_dict})
 
 
 # -------------------------------------------------------------
@@ -2179,6 +2186,8 @@ def freelance_track_page(request_id):
         return redirect("/freelance/request")
     
     req_dict = dict(req)
+    if req_dict.get("created_at"):
+        req_dict["created_at"] = str(req_dict["created_at"])
     barber_dict = None
     if req_dict.get("barber_id"):
         b_row = conn.execute("SELECT * FROM freelance_barbers WHERE id = ?", (req_dict["barber_id"],)).fetchone()
