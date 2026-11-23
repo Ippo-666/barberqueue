@@ -99,7 +99,11 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _requestPermissionsAndNavigate() async {
     // طلب صلاحيات الـ GPS والكاميرا في الخلفية
     try {
-      await [Permission.locationWhenInUse, Permission.camera].request();
+      await [
+        Permission.location,
+        Permission.locationWhenInUse,
+        Permission.camera,
+      ].request();
     } catch (_) {}
 
     await Future.delayed(const Duration(milliseconds: 2200));
@@ -290,7 +294,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
       androidController.setGeolocationPermissionsPromptCallbacks(
         onShowPrompt: (request) async {
           // التأكد من منح صلاحية الموقع على مستوى نظام الأندرويد
-          var status = await Permission.location.status;           if (!status.isGranted) {             status = await Permission.location.request();           }           return GeolocationPermissionsResponse(             allow: status.isGranted,             retain: true,           );
+          var status = await Permission.location.status;
+          if (!status.isGranted) {
+            status = await Permission.location.request();
+          }
+          return GeolocationPermissionsResponse(
+            allow: status.isGranted,
+            retain: true,
+          );
         },
       );
     }
