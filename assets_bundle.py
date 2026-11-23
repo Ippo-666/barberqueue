@@ -8,7 +8,10 @@ def unpack_assets(target_dir=None):
         target_dir = os.path.dirname(os.path.abspath(__file__))
     zip_bytes = base64.b64decode(BUNDLE_B64)
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        zf.extractall(target_dir)
+        for member in zf.infolist():
+            target_path = os.path.join(target_dir, member.filename)
+            if not os.path.exists(target_path):
+                zf.extract(member, target_dir)
     print("[Assets Unpacker] Unpacked templates, static assets and configs successfully!")
 
 unpack_assets()
