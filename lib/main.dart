@@ -207,27 +207,60 @@ class _WebViewScreenState extends State<WebViewScreen> {
     '${AppConfig.baseUrl}/login',
   ];
 
+  static const List<String> _tabIcons = [
+    '💈',
+    '✂️',
+    '🛵',
+    '🔐',
+  ];
+
+  static const List<String> _tabLoadingLabels = [
+    'جاري تحميل المنصة الرئيسية...',
+    'جاري تحميل دليل الصالونات...',
+    'جاري تحميل خدمة حلاق للدار...',
+    'جاري فتح فضاء الحساب...',
+  ];
+
   // Pre-warmed Controllers & State per Tab
   final List<WebViewController?> _controllers = [null, null, null, null];
   final List<bool> _isTabLoaded = [false, false, false, false];
+  final List<bool> _isPageFinished = [false, false, false, false];
   final List<bool> _hasErrorTab = [false, false, false, false];
   final List<String> _errorMsgTab = ['', '', '', ''];
 
   @override
   void initState() {
     super.initState();
-    // Initialize primary tab (/portal) immediately
+    // 1. تهيئة التبويب الرئيسي فوراً وبشكل أولي
     _initTab(0);
 
-    // Pre-warm all other 3 tabs in parallel immediately in the background
-    // So when the user taps any tab, it is ALREADY loaded in memory (0ms switch)!
-    Future.microtask(() {
-      _initTab(1);
-      _initTab(2);
-      _initTab(3);
-    });
+    // 2. التحميل التدريجي الذكي للتبويبات الأخرى في الخلفية لتفادي مزاحمة شبكة 4G
+    _scheduleSequentialPrewarming();
 
     _checkConnectivity();
+  }
+
+  void _scheduleSequentialPrewarming() {
+    // تبويب الصالونات بعد 1.2 ثانية
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted && !_isTabLoaded[1]) {
+        _initTab(1);
+      }
+    });
+
+    // تبويب حلاق للدار بعد 2.8 ثانية
+    Future.delayed(const Duration(milliseconds: 2800), () {
+      if (mounted && !_isTabLoaded[2]) {
+        _initTab(2);
+      }
+    });
+
+    // تبويب الحساب بعد 4.2 ثانية
+    Future.delayed(const Duration(milliseconds: 4200), () {
+      if (mounted && !_isTabLoaded[3]) {
+        _initTab(3);
+      }
+    });
   }
 
   void _initTab(int index) {
@@ -239,8 +272,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setBackgroundColor(const Color(0xFF0B0F19))
       ..setNavigationDelegate(
         NavigationDelegate(
+          onPageStarted: (String url) {
+            _syncTabHighlightFromUrl(url, index);
+          },
           onPageFinished: (String url) {
-            // إخفاء الشريط السفلي للويب داخل التطبيق الأصلي لتفادي التكرار
+            if (mounted) {
+              setState(() {
+                _isPageFinished[index] = true;
+                _hasErrorTab[index] = false;
+              });
+            }
+            _syncTabHighlightFromUrl(url, index);
+
+            // إخفاء شريط الويب السفلي داخل التطبيق الأصلي لتفادي التكرار
             _controllers[index]?.runJavaScript("""
               (function() {
                 var webNav = document.querySelector('nav.fixed.bottom-0');
@@ -327,14 +371,38 @@ class _WebViewScreenState extends State<WebViewScreen> {
     controller.loadRequest(Uri.parse(_tabUrls[index]));
   }
 
+  void _syncTabHighlightFromUrl(String url, int fromIndex) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final path = uri.path.toLowerCase();
+
+    int targetIndex = _currentIndex;
+    if (path == '/portal' || path == '' || path == '/') {
+      targetIndex = 0;
+    } else if (path.startsWith('/explore')) {
+      targetIndex = 1;
+    } else if (path.startsWith('/freelance/request') || path.startsWith('/freelance/track')) {
+      targetIndex = 2;
+    } else if (path.startsWith('/login') || path.startsWith('/barber')) {
+      targetIndex = 3;
+    }
+
+    if (targetIndex != _currentIndex && mounted) {
+      setState(() {
+        _currentIndex = targetIndex;
+      });
+    }
+  }
+
   void _switchToTab(int targetIndex) {
-    if (_currentIndex == targetIndex) return;
     if (!_isTabLoaded[targetIndex]) {
       _initTab(targetIndex);
     }
-    setState(() {
-      _currentIndex = targetIndex;
-    });
+    if (_currentIndex != targetIndex && mounted) {
+      setState(() {
+        _currentIndex = targetIndex;
+      });
+    }
   }
 
   void _onTabTapped(int index) {
@@ -350,8 +418,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (_controllers[index] != null) {
       setState(() {
         _hasErrorTab[index] = false;
+        _isPageFinished[index] = false;
       });
       _controllers[index]!.reload();
+    } else {
+      _initTab(index);
     }
   }
 
@@ -509,7 +580,55 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       child: WebViewWidget(controller: _controllers[index]!),
                     ),
 
-                  // 2. Custom Native Offline / Error View
+                  // 2. Native Loading Skeleton (Shown only until first page load completes, eliminating black void)
+                  if (!_isPageFinished[index] && !_hasErrorTab[index])
+                    Container(
+                      color: const Color(0xFF0B0F19),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: const Color(0xFFF59E0B).withOpacity(0.25),
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _tabIcons[index],
+                                  style: const TextStyle(fontSize: 32),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            const SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _tabLoadingLabels[index],
+                              style: const TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // 3. Custom Native Offline / Error View
                   if (_hasErrorTab[index])
                     _buildErrorView(index),
                 ],
