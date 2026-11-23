@@ -1,0 +1,3022 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>لوحة تحكم الحلاق - دورك</title>
+  
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0F172A">
+  <script src="https://cdn.tailwindcss.com">
+    function confirmBarberLogout() {
+      if (confirm("هل أنت متأكد من تسجيل الخروج من حساب الصالون؟")) {
+        window.location.href = "/login?role=salon";
+      }
+    }
+    
+</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: 'Tajawal', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .custom-scroll::-webkit-scrollbar { display: none; }
+    
+    @media print {
+      body * { visibility: hidden !important; }
+      #thermal-receipt-area, #thermal-receipt-area * { visibility: visible !important; }
+      #thermal-receipt-area {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 4mm !important;
+        color: #000 !important;
+        background: #fff !important;
+        font-family: monospace, sans-serif !important;
+        font-size: 11px !important;
+        display: block !important;
+      }
+    }
+  </style>
+</head>
+<body id="body-container" class="bg-slate-950 text-slate-100 min-h-screen pb-28 antialiased flex flex-col items-center">
+
+  <!-- Top Navbar (Clean 56px / h-14 Single Row) -->
+  <header class="w-full max-w-2xl bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 h-14 flex items-center justify-between sticky top-0 z-40">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-base shadow-md shrink-0">
+        ✂️
+      </div>
+      <div>
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-xs sm:text-sm font-black text-white leading-tight">{{ salon.barber_name if salon else 'المعلم رشيد' }}</h1>
+          {% if all_salons and all_salons|length > 1 %}
+          <select onchange="location.href='/barber/'+this.value" class="bg-slate-950 border border-amber-500/50 text-amber-300 text-[10px] font-bold rounded-lg px-1.5 py-0.5 outline-none" title="التبديل بين الصالونات">
+            {% for s in all_salons %}
+            <option value="{{ s.id }}" {% if s.id == salon_id %}selected{% endif %}>
+              💈 {{ s.name }} ({{ s.commune }})
+            </option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <p class="text-[10px] text-slate-400 leading-none">{{ salon.name if salon else 'صالون الأناقة الملكي' }} • {{ salon.commune if salon else 'باب الزوار' }}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <a href="/caisse/{{ salon_id }}" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-300 px-2.5 py-1 rounded-lg border border-slate-700 transition font-bold" title="شاشة لاكيس">
+        🖥️ لاكيس
+      </a>
+      <a href="/portal" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 transition font-bold" title="الرئيسية">
+        ← الرئيسية
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="w-full max-w-2xl px-4 py-4 space-y-4">
+
+    <!-- 🔔 NEW BOOKING TOAST BANNER (إشعار فوري وتنبيه عند حجز زبون جديد) -->
+    <div id="new-booking-toast" class="hidden p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 shadow-2xl border-2 border-white flex items-center justify-between gap-2 animate-pulse">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl animate-bounce">🔔</span>
+        <div>
+          <strong class="text-xs font-black block" id="toast-booking-title">زبون جديد حجز دوره الآن!</strong>
+          <span class="text-[11px] font-bold" id="toast-booking-desc">جاري التحديث...</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="toast-action-btn" onclick="callNextClient(); dismissToast();" class="px-3 py-1.5 bg-slate-950 text-amber-300 hover:bg-slate-900 rounded-xl text-xs font-black transition shadow">
+          💺 إدخال للكرسي
+        </button>
+        <button onclick="dismissToast()" class="p-1.5 text-slate-950 hover:bg-amber-600/30 rounded-lg text-sm font-bold">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- 🟢/🔴 DEDICATED SHOP OPERATIONAL STATUS (حالة المحل - مفتوح / مغلق) -->
+    <div id="shop-status-banner" class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/70 to-slate-900 border-2 border-emerald-500/50 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+      <div class="flex items-center gap-3">
+        <span class="text-3xl" id="shop-status-icon">🟢</span>
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs sm:text-sm font-black text-white" id="shop-status-text">حالة الصالون: مفتوح الآن</h2>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold" id="shop-status-pill">استقبال الزبائن نشط</span>
+          </div>
+          <p class="text-[11px] text-slate-300 mt-0.5" id="shop-status-desc">الزبائن يمكنهم حجز أدوارهم عبر هواتفهم ودخول الطابور الآن</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="toggleShopStatus()" id="shop-status-action-btn" class="px-3.5 py-2 rounded-xl text-xs font-black transition shadow flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/40">
+          <span>🔒</span> إغلاق الصالون
+        </button>
+      </div>
+    </div>
+
+    <!-- 📊 BARBER LIVE RUSH & CROWD STATUS GAUGE (مقياس ضغط وزحمة المحل للحلاق) -->
+    <div id="barber-crowd-card" class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-md">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div id="barber-crowd-icon-box" class="w-10 h-10 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xl shrink-0 font-bold shadow-inner">
+            🟢
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 class="text-xs sm:text-sm font-black text-white" id="barber-crowd-title">ضغط الصالون: خفيف وهادئ (0 زبائن)</h2>
+              <span id="barber-crowd-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">🟢 خفيف</span>
+            </div>
+            <p class="text-[11px] text-slate-300 mt-0.5" id="barber-crowd-desc">
+              الكرسي شاغر ولا يوجد زبائن في الانتظار. وتيرة العمل هادئة ومريحة.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+          <span class="text-[10px] text-slate-400 font-bold">مستوى الازدحام:</span>
+          <div class="flex items-center gap-1" id="barber-crowd-meter-bars">
+            <span class="h-2 w-4 rounded-full bg-emerald-500"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Crowd Override Control Bar (التحكم اليدوي في حالة المحل) -->
+      <div class="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] text-amber-300 font-bold flex items-center gap-1">
+            <span>🎛️</span> التحكم اليدوي بالحالة:
+          </span>
+          <span id="crowd-override-status-tag" class="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-bold">
+            وضع تلقائي (حسب الطابور)
+          </span>
+        </div>
+
+        <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <button onclick="setManualCrowdOverride('auto')" id="override-btn-auto" class="px-2.5 py-1 rounded-lg text-[10px] font-black transition bg-amber-500 text-slate-950 shadow" title="حساب تلقائي حسب عدد الزبائن في الطابور">
+            🤖 تلقائي
+          </button>
+          <button onclick="setManualCrowdOverride('low')" id="override-btn-low" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white transition" title="تحديد يدوي: المحل خفيف وراضية">
+            🟢 خفيف
+          </button>
+          <button onclick="setManualCrowdOverride('medium')" id="override-btn-medium" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white transition" title="تحديد يدوي: حركة وإقبال متوسط">
+            🟡 شوية زبائن
+          </button>
+          <button onclick="setManualCrowdOverride('high')" id="override-btn-high" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white transition" title="تحديد يدوي: زحمة واكتظاظ كبير">
+            🔴 زحمة بزاف
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⚡ SLEEK COMMAND BAR (شريط التحكم السريع المدمج) -->
+    <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs shadow-xl">
+      <!-- Right: Drawer Toggle -->
+      <div class="flex items-center gap-2">
+        <button onclick="openSalonDrawer()" class="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-2 active:scale-95">
+          <span class="text-base">☰</span>
+          <span>إدارة الصالون والإعدادات</span>
+        </button>
+      </div>
+
+      <!-- Left: Operational Quick Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Screen Wake Lock Button -->
+        <button onclick="toggleWakeLock()" id="wakelock-btn" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95" title="إبقاء شاشة الهاتف مضاءة دائماً بدون قفل">
+          <span id="wakelock-icon">💡</span>
+          <span id="wakelock-text">شاشة مضاءة</span>
+        </button>
+
+        <!-- Quick Walk-in Client -->
+        <button onclick="openWalkInModal()" class="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95 shadow" title="تسجيل زبون حضوري سريع من الشارع">
+          <span>⚡</span>
+          <span>+ زبون حضوري</span>
+        </button>
+
+        <!-- Quick Settlement Button -->
+        <button onclick="openLiveSettlementModal()" class="px-3 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95 shadow" title="عرض حصيلة اليوم وإرسال التقرير لواتساب">
+          <span>📊</span>
+          <span>حصيلة اليوم</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ☰ SALON MANAGEMENT SLIDE-OVER DRAWER (الدرج الجانبي لإدارة الصالون) -->
+    <div id="salon-drawer" class="hidden fixed inset-0 z-50 overflow-hidden">
+      <!-- Backdrop -->
+      <div onclick="closeSalonDrawer()" class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"></div>
+
+      <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div class="w-screen max-w-md bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col justify-between overflow-y-auto custom-scroll">
+          
+          <!-- Drawer Header -->
+          <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 sticky top-0 z-10">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl">💈</span>
+              <div>
+                <h3 class="font-black text-white text-base">إدارة الصالون والإعدادات</h3>
+                <p class="text-[11px] text-slate-400">جميع أدوات المحاسبة، التموين، والخدمات</p>
+              </div>
+            </div>
+            <button onclick="closeSalonDrawer()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold transition">
+              ✕
+            </button>
+          </div>
+
+          <!-- Drawer Body Content -->
+          <div class="p-4 sm:p-5 space-y-5 text-xs flex-1">
+            
+            <!-- SECTION 1: المالية والمحاسبة اليومية -->
+            <div class="space-y-2">
+              <span class="text-[11px] font-black text-amber-400 uppercase tracking-wider block">💰 المالية والمحاسبة</span>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="closeSalonDrawer(); openLiveSettlementModal();" class="p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-amber-500/40 text-amber-300 text-right space-y-1 transition shadow">
+                  <span class="text-xl block">📊</span>
+                  <strong class="text-white block text-xs">حصيلة اليوم</strong>
+                  <span class="text-[10px] text-slate-400 block">كاش، بريدي موب، تقرير واتساب</span>
+                </button>
+
+                <button onclick="closeSalonDrawer(); openExpensesModal();" class="p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-rose-500/40 text-rose-300 text-right space-y-1 transition shadow">
+                  <span class="text-xl block">🧾</span>
+                  <strong class="text-white block text-xs">مصاريف الصندوق</strong>
+                  <span class="text-[10px] text-slate-400 block">تسجيل خروج أموال ومشتريات</span>
+                </button>
+
+                <button onclick="closeSalonDrawer(); openMonthlyModal();" class="p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 text-right space-y-1 transition shadow">
+                  <span class="text-xl block">📈</span>
+                  <strong class="text-white block text-xs">أرشيف الشهر</strong>
+                  <span class="text-[10px] text-slate-400 block">إحصائيات 30 يوماً والأرباح</span>
+                </button>
+
+                <button onclick="closeSalonDrawer(); openBaridiMobModal();" class="p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-blue-500/40 text-blue-300 text-right space-y-1 transition shadow">
+                  <span class="text-xl block">🏦</span>
+                  <strong class="text-white block text-xs">بريدي موب RIP</strong>
+                  <span class="text-[10px] text-slate-400 block">تعديل رقم الحساب للزبائن</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- SECTION 2: الخدمات والزبائن -->
+            <div class="space-y-2">
+              <span class="text-[11px] font-black text-indigo-400 uppercase tracking-wider block">✂️ الخدمات والزبائن</span>
+              <div class="space-y-1.5">
+                <button onclick="closeSalonDrawer(); openPricingModal();" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">⚙️</span>
+                    <div>
+                      <strong class="text-white block text-xs">قائمة الخدمات والأسعار</strong>
+                      <span class="text-[10px] text-slate-400">تعديل أسعار ومدد الحلاقة</span>
+                    </div>
+                  </div>
+                  <span class="text-slate-400 text-xs">➔</span>
+                </button>
+
+                <button onclick="closeSalonDrawer(); openGroomModal();" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">👑</span>
+                    <div>
+                      <strong class="text-white block text-xs">باقات العرسان والمناسبات VIP</strong>
+                      <span class="text-[10px] text-slate-400">أجندة مواعيد العرسان والعربون</span>
+                    </div>
+                  </div>
+                  <span id="groom-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">0</span>
+                </button>
+
+                <button onclick="closeSalonDrawer(); openReviewsModal();" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">⭐</span>
+                    <div>
+                      <strong class="text-white block text-xs">آراء وتقييمات الزبائن</strong>
+                      <span class="text-[10px] text-slate-400">رسائل ورأي الزبائن السري</span>
+                    </div>
+                  </div>
+                  <span id="reviews-avg-badge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40">4.9</span>
+                </button>
+
+                <button onclick="closeSalonDrawer(); openBannedModal();" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">🚫</span>
+                    <div>
+                      <strong class="text-white block text-xs">قائمة الزبائن المحظورين</strong>
+                      <span class="text-[10px] text-slate-400">إدارة وفك الحظر عن المتغيبين</span>
+                    </div>
+                  </div>
+                  <span id="banned-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">0</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- SECTION 3: أوضاع العمل والمودات -->
+            <div class="space-y-2">
+              <span class="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">🚀 أوضاع العمل والتنبيه</span>
+              <div class="space-y-2">
+                <!-- Eid Rush Mode -->
+                <button onclick="toggleEidMode()" id="eid-btn" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">🚀</span>
+                    <div>
+                      <strong class="text-white block text-xs">وضع ضغط الأعياد والمواسم</strong>
+                      <span class="text-[10px] text-slate-400">تسريع الطابور وإشعار الزبائن بالضغط</span>
+                    </div>
+                  </div>
+                  <span id="eid-label" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">معطل</span>
+                </button>
+
+                <!-- Mega Buttons Mode -->
+                <!-- Voice Caller Mode -->
+                <button onclick="toggleVoiceCaller()" id="voice-caller-btn" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">🔊</span>
+                    <div>
+                      <strong class="text-white block text-xs">المنادي الصوتي الآلي</strong>
+                      <span class="text-[10px] text-slate-400">نداء ناطق بالدارجة باسم الزبون والكرسي</span>
+                    </div>
+                  </div>
+                  <span id="voice-caller-label" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">نشط</span>
+                </button>
+
+                <!-- Happy Hour Mode -->
+                <button onclick="closeSalonDrawer(); openHappyHourModal();" id="happy-hour-btn" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-right transition">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xl">⏰</span>
+                    <div>
+                      <strong class="text-white block text-xs">تخفيض الساعات الهادئة</strong>
+                      <span class="text-[10px] text-slate-400">تخفيض تلقائي لجلب الزبائن وقت الركود</span>
+                    </div>
+                  </div>
+                  <span id="happy-hour-label" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">معطل</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Drawer Footer -->
+          <div class="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between gap-2">
+            <button onclick="confirmBarberLogout()" class="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-bold text-xs rounded-xl transition flex items-center gap-1.5">
+              <span>🚪</span> تسجيل الخروج
+            </button>
+            <span class="text-[10px] text-slate-500">دورك v2.6 • نظام إدارة الصالونات</span>
+            <button onclick="closeSalonDrawer()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition">
+              إغلاق القائمة
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- MULTI-CHAIR STATIONS BAY (محاكاة كراسي ومحطات الحلاقة الحية) -->
+    <div class="p-4 sm:p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-2xl">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">💺</span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-base sm:text-lg font-black text-white">محطات كراسي الحلاقة في الصالون</h2>
+              <span id="chairs-count-badge" class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">2 كراسي نشطة</span>
+            </div>
+            <p class="text-[11px] text-slate-400">محاكاة حية لكل كرسي: إدخال الزبائن في نفس الوقت وإنهاء الحلاقة فوراً لكل حلاق</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openAddChairModal()" class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 active:scale-95">
+            <span>➕</span> إضافة كرسي جديد
+          </button>
+          <button onclick="openWalkInModal()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95">
+            <span>⚡</span> + زبون حضوري
+          </button>
+        </div>
+      </div>
+
+      <!-- DYNAMIC CHAIRS GRID -->
+      <div id="chairs-grid-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Rendered dynamically by renderChairsBay() -->
+        <div class="p-6 text-center text-xs text-slate-500 col-span-2">جاري تحميل محطات الكراسي...</div>
+      </div>
+    </div>
+
+    <!-- CHAIRS PERFORMANCE & REVENUE LEADERBOARD (الأكثر عملاً وبطل المداخيل) -->
+    <div id="chairs-leaderboard-container" class="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 border border-amber-500/40 space-y-4 shadow-xl">
+      <!-- Header -->
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🏆</span>
+          <div>
+            <h3 class="text-sm sm:text-base font-black text-white">إحصائيات أداء الكراسي وتصفية المداخيل اليومية</h3>
+            <p class="text-[10px] text-slate-400">مقارنة أداء الحلاقين، الكرسي الأكثر إنجازاً، بطل المداخيل، وتقسيم النسبة (Le Pourcentage)</p>
+          </div>
+        </div>
+        <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-bold">
+          مباشر اليوم ⚡
+        </span>
+      </div>
+
+      <!-- Top Highlights: Most Haircuts + Top Earner -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="chairs-highlights-grid">
+        <!-- Highlight 1: الأكثر عملاً (حسب عدد الحلاقات) -->
+        <div class="p-3.5 rounded-2xl bg-slate-950 border border-purple-500/40 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">✂️</span>
+            <div>
+              <span class="text-[10px] font-bold text-purple-400 block">الأكثر عملاً اليوم (عدد الحلاقات)</span>
+              <h4 class="text-sm font-black text-white mt-0.5" id="top-haircuts-chair-name">كرسي 1</h4>
+              <span class="text-[11px] text-slate-400" id="top-haircuts-barber-name">المعلم كمال</span>
+            </div>
+          </div>
+          <div class="text-left bg-purple-950/40 px-3 py-1.5 rounded-xl border border-purple-500/30">
+            <span class="text-lg font-black text-purple-300" id="top-haircuts-count">0</span>
+            <span class="text-[10px] text-slate-400 block">حلاقة</span>
+          </div>
+        </div>
+
+        <!-- Highlight 2: بطل المداخيل (أعلى مدخول بالدينار) -->
+        <div class="p-3.5 rounded-2xl bg-slate-950 border border-amber-500/40 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">👑</span>
+            <div>
+              <span class="text-[10px] font-bold text-amber-400 block">بطل المداخيل اليوم (أعلى دخل)</span>
+              <h4 class="text-sm font-black text-white mt-0.5" id="top-revenue-chair-name">كرسي 1</h4>
+              <span class="text-[11px] text-slate-400" id="top-revenue-barber-name">المعلم كمال</span>
+            </div>
+          </div>
+          <div class="text-left bg-amber-950/40 px-3 py-1.5 rounded-xl border border-amber-500/30">
+            <span class="text-lg font-black text-amber-400" id="top-revenue-amount">0 د.ج</span>
+            <span class="text-[10px] text-slate-400 block">إجمالي</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue Contribution Multi-Bar -->
+      <div class="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-300 font-bold flex items-center gap-1.5">
+            <span>📊</span> شريط تقسيم حصص المداخيل بين الكراسي
+          </span>
+          <span class="text-amber-400 font-black" id="chairs-total-rev-label">الإجمالي: 0 د.ج</span>
+        </div>
+        <div class="w-full h-3.5 rounded-full bg-slate-800 overflow-hidden flex" id="chairs-revenue-bar">
+          <!-- segments rendered dynamically -->
+        </div>
+        <div class="flex flex-wrap items-center gap-3 text-[10px] text-slate-400 pt-1" id="chairs-revenue-legend">
+          <!-- legends rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Detailed Breakdown Table / Cards for Settlement (Le Pourcentage) -->
+      <div class="space-y-2">
+        <span class="text-xs font-black text-white block">💵 تصفية الحسابات وتقسيم النسبة (نصيب الحلاق / نصيب الصالون):</span>
+        <div id="chairs-breakdown-list" class="space-y-2">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- WAITING QUEUE LIST -->
+    <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-base">👥</span>
+          <h3 class="text-sm font-extrabold text-white">قائمة الانتظار في الصالون</h3>
+        </div>
+        <span id="queue-count-badge" class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full font-bold">
+          0 زبائن
+        </span>
+      </div>
+
+      <div id="barber-queue-list" class="space-y-2.5">
+        <!-- Dynamically rendered -->
+        <div class="text-center py-6 text-xs text-slate-500">لا يوجد زبائن في قائمة الانتظار حالياً.</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL 2: SERVICES & PRICING EDITOR -->
+  <div id="pricing-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-purple-500 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scroll p-4 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">⚙️</span>
+          <div>
+            <h3 class="font-black text-white text-sm">إدارة وتعديل أسعار ومدد الخدمات</h3>
+            <p class="text-[10px] text-slate-400">تحكم كامل في قائمة خدماتك وتعديل الأسعار حسب رغبتك</p>
+          </div>
+        </div>
+        <button onclick="closePricingModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div id="pricing-services-list" class="space-y-2">
+        <!-- Dynamically rendered -->
+      </div>
+
+      <!-- Add New Custom Service -->
+      <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+        <span class="text-xs font-bold text-purple-300 block">+ إضافة خدمة جديدة لقائمتك:</span>
+        <div class="grid grid-cols-3 gap-2">
+          <input id="new-srv-name" type="text" placeholder="اسم الخدمة" class="col-span-3 sm:col-span-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+          <input id="new-srv-price" type="number" placeholder="السعر (د.ج)" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+          <input id="new-srv-dur" type="number" placeholder="المدة (دقيقة)" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+        </div>
+        <button onclick="addNewCustomService()" class="w-full py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition">
+          + حفظ الخدمة الجديدة
+        </button>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="saveServicesChanges()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow transition">
+          ✓ حفظ وتثبيت الأسعار
+        </button>
+        <button onclick="closePricingModal()" class="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition">
+          إلغاء
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: QUICK WALK-IN IN-APP DIALOG (بدون prompt) -->
+  <div id="walkin-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-sm w-full p-4 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <span class="font-extrabold text-white text-sm flex items-center gap-1.5">
+          <span>⚡</span> تسجيل زبون حضوري سريع
+        </span>
+        <button onclick="closeWalkInModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
+      </div>
+      <p class="text-[11px] text-slate-400">اختر نوع الخدمة السريعة لإدراجها في حساب اليوم دون إرباك الحجوزات:</p>
+      
+      <div class="space-y-2">
+        <button onclick="submitWalkIn('تحديد لحية سريع', 15, 300)" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-xs transition">
+          <span class="font-bold text-white">🧔 تحديد لحية سريع (15 دقيقة)</span>
+          <span class="font-black text-amber-400">300 د.ج</span>
+        </button>
+        <button onclick="submitWalkIn('حلاقة شعر سريعة', 20, 400)" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-xs transition">
+          <span class="font-bold text-white">✂️ حلاقة شعر سريعة (20 دقيقة)</span>
+          <span class="font-black text-amber-400">400 د.ج</span>
+        </button>
+        <button onclick="submitWalkIn('باقة VIP سريعة', 30, 800)" class="w-full p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-xs transition">
+          <span class="font-bold text-white">👑 باقة VIP سريعة (30 دقيقة)</span>
+          <span class="font-black text-amber-400">800 د.ج</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: DAILY SETTLEMENT REPORT -->
+  <div id="settlement-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-4 sm:p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">📊</span>
+          <div>
+            <h3 class="font-black text-white text-sm">حصيلة اليوم المالية (Daily Settlement)</h3>
+            <p class="text-[10px] text-slate-400" id="settlement-date-label">اليوم</p>
+          </div>
+        </div>
+        <button onclick="closeSettlementModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 to-slate-950 border border-amber-500/50 text-center space-y-1">
+        <span class="text-[11px] text-amber-300 font-bold block">إجمالي مدخولك الصافي اليوم:</span>
+        <strong class="text-3xl font-black text-amber-400 block" id="settlement-total-income">0 د.ج</strong>
+        <span class="text-[10px] text-slate-400 block">خدمات الحلاقة + عمولات تسليم المنتجات</span>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between">
+          <span class="text-slate-400">إجمالي الزبائن المكتملين:</span>
+          <strong class="text-white" id="settlement-clients-count">0 زبائن</strong>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between">
+          <span class="text-slate-400">مدخول خدمات الحلاقة:</span>
+          <strong class="text-white" id="settlement-services-rev">0 د.ج</strong>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between">
+          <span class="text-slate-400">عمولتك من تسليم المنتجات:</span>
+          <strong class="text-emerald-400" id="settlement-products-comm">+0 د.ج</strong>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between">
+          <span class="text-slate-400">إنذارات الغياب (No-Shows):</span>
+          <span class="text-rose-400 font-bold" id="settlement-strikes-count">0 إنذارات</span>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between">
+          <span class="text-slate-400">مصاريف الصندوق اليومية (Dépenses):</span>
+          <strong class="text-rose-400" id="settlement-expenses-total">-0 د.ج</strong>
+        </div>
+        <div class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex justify-between">
+          <span class="text-emerald-300 font-bold">الصافي الفعلي في الصندوق (Net Réel):</span>
+          <strong class="text-emerald-400 font-black" id="settlement-net-real">0 د.ج</strong>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="shareReportWhatsApp()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition">
+          <span>📲</span> مشاركة التقرير واتساب
+        </button>
+        <button onclick="closeSettlementModal()" class="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition">
+          إغلاق
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: BANNED CUSTOMERS (قائمة المحظورين) -->
+  <div id="banned-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-4 sm:p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🚫</span>
+          <div>
+            <h3 class="font-black text-white text-sm">قائمة الزبائن المحظورين</h3>
+            <p class="text-[10px] text-slate-400">الزبائن الذين تلقوا إنذار غياب ولم يحضروا لموعدهم</p>
+          </div>
+        </div>
+        <button onclick="closeBannedModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div id="banned-list-container" class="space-y-2 max-h-72 overflow-y-auto custom-scroll p-1">
+        <!-- Rendered dynamically by openBannedModal() -->
+      </div>
+
+      <button onclick="closeBannedModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition">
+        إغلاق
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 6: ADD NEW CHAIR -->
+  <div id="add-chair-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">💺</span>
+          <div>
+            <h3 class="font-black text-white text-sm">إضافة كرسي حلاقة جديد للصالون</h3>
+            <p class="text-[10px] text-slate-400">كرسي إضافي لحلاق شريك أو مساعد في المحل</p>
+          </div>
+        </div>
+        <button onclick="closeAddChairModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">اسم الحلاق المسند للكرسي:</label>
+          <input id="new-chair-barber-name" type="text" placeholder="مثلاً: سفيان (Coiffeur Barbe)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-xs focus:border-emerald-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">نسبة الحلاق من المداخيل (Le Pourcentage %):</label>
+          <div class="flex items-center gap-2">
+            <input id="new-chair-commission" type="number" min="0" max="100" value="50" class="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-bold text-center text-sm focus:border-emerald-500 focus:outline-none">
+            <span class="text-xs text-slate-400">% للحلاق (والباقي للمحل/الصالون)</span>
+          </div>
+          <p class="text-[10px] text-slate-500 mt-1">النمط الشائع في الجزائر: 50% للحلاق و 50% لصاحب الصالون.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeAddChairModal()" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition">
+          إلغاء
+        </button>
+        <button onclick="submitAddNewChair()" class="py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg transition">
+          ✓ حفظ وإضافة الكرسي
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 7: SMART HAPPY HOURS (عرض الساعات الهادئة) -->
+  <div id="happy-hour-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">⏰</span>
+          <div>
+            <h3 class="font-black text-white text-sm">عرض الساعات الهادئة (Happy Hour الصباحي)</h3>
+            <p class="text-[10px] text-slate-400">تخفيض تلقائي لتشجيع الزبائن في الفترات الهادئة (الصباح)</p>
+          </div>
+        </div>
+        <button onclick="closeHappyHourModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800">
+          <div>
+            <span class="text-xs font-bold text-white block">تفعيل التخفيض الآن:</span>
+            <span class="text-[10px] text-slate-400">يظهر شريط ترويجي فوري في شاشة الزبائن مع خصم تلقائي</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="hh-active-toggle" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">قيمة التخفيض للزبون (د.ج):</label>
+          <input id="hh-discount-input" type="number" step="50" min="0" value="100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-amber-400 font-bold text-sm focus:border-emerald-500 focus:outline-none">
+          <span class="text-[10px] text-slate-400 mt-1 block">مثلاً 100 د.ج تخصم تلقائياً من الفاتورة عند الحجز.</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">رسالة العرض الترويجية:</label>
+          <input id="hh-note-input" type="text" value="عرض الصباح الهادئ - تخفيض خاص!" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:border-emerald-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeHappyHourModal()" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition">
+          إلغاء
+        </button>
+        <button onclick="saveHappyHour()" class="py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg transition">
+          ✓ حفظ وتطبيق العرض
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 8: BARIDIMOB RIP SETUP -->
+  <div id="baridimob-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🏦</span>
+          <div>
+            <h3 class="font-black text-white text-sm">إعداد حساب بريدي موب (BaridiMob RIP)</h3>
+            <p class="text-[10px] text-slate-400">رقم الحساب البريدي المكون من 20 رقم للدفع الإلكتروني السريع</p>
+          </div>
+        </div>
+        <button onclick="closeBaridiMobModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-slate-300 leading-relaxed">
+          💡 عند تفعيل هذا الرقم، يظهر للزبون خيار الدفع ببريدي موب مع زر <strong>نسخ الـ RIP بنقرة واحدة</strong> دون الحاجة لكتابته يدوياً في التطبيق.
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">رقم RIP البريدي (20 رقم):</label>
+          <input id="salon-rip-input" type="text" maxlength="20" placeholder="00799999000123456789" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-amber-400 font-mono text-sm tracking-wider focus:border-emerald-500 focus:outline-none text-center">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeBaridiMobModal()" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition">
+          إلغاء
+        </button>
+        <button onclick="saveBaridiMobRip()" class="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition">
+          ✓ حفظ رقم RIP
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 9: SALON EXPENSES REGISTER (مصاريف الصندوق) -->
+  <div id="expenses-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scroll p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🧾</span>
+          <div>
+            <h3 class="font-black text-white text-sm">سجل مصاريف الصالون اليومية (Sorties de Caisse)</h3>
+            <p class="text-[10px] text-slate-400">القهوة، الشفرات، مواد التنظيف، وأي خرج من الصندوق لمعرفة الصافي الحقيقي</p>
+          </div>
+        </div>
+        <button onclick="closeExpensesModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <!-- Total Expenses Today Card -->
+      <div class="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">💸</span>
+          <div>
+            <span class="text-[10px] text-rose-300 font-bold block">مجموع مصاريف الصندوق لليوم:</span>
+            <strong class="text-xl font-black text-rose-400" id="expenses-total-today">0 د.ج</strong>
+          </div>
+        </div>
+        <span class="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold">تخصم تلقائياً من الكاسة</span>
+      </div>
+
+      <!-- Add Expense Form -->
+      <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5">
+        <span class="text-xs font-bold text-slate-200 block">+ تسجيل مصروف جديد من الصندوق:</span>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-0.5">المبلغ (د.ج):</label>
+            <input id="exp-amount-input" type="number" step="50" placeholder="مثلاً: 300" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-0.5">نوع المصروف:</label>
+            <select id="exp-category-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2 py-1.5 text-xs text-white">
+              <option value="coffee">☕ قهوة وفطور</option>
+              <option value="blades">✂️ شفرات ومواد حلاقة</option>
+              <option value="cleaning">🧹 نظافة وصيانة</option>
+              <option value="other">🧾 مصاريف أخرى</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-0.5">التفاصيل / البيان:</label>
+            <input id="exp-desc-input" type="text" placeholder="مثلاً: قهوة للحلاقين" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white">
+          </div>
+        </div>
+        <button onclick="submitAddExpense()" class="w-full py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1.5">
+          <span>+</span> إضافة هذا المصروف
+        </button>
+      </div>
+
+      <!-- Expenses List -->
+      <div class="space-y-2">
+        <span class="text-xs font-bold text-slate-300 block">قائمة مصاريف اليوم:</span>
+        <div id="expenses-items-list" class="space-y-1.5 max-h-56 overflow-y-auto custom-scroll">
+          <!-- Dynamically loaded -->
+        </div>
+      </div>
+
+      <button onclick="closeExpensesModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition">
+        إغلاق
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 10: CUSTOMER REVIEWS & SECRET COMPLAINTS (صندوق الشكاوى السري) -->
+  <div id="reviews-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-purple-500 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scroll p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">⭐</span>
+          <div>
+            <h3 class="font-black text-white text-sm">تقييمات الزبائن وصندوق الشكاوى السري</h3>
+            <p class="text-[10px] text-slate-400">آراء وملاحظات الزبائن تصل فقط للمعلم في سرية تامة</p>
+          </div>
+        </div>
+        <button onclick="closeReviewsModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <!-- Rating summary card -->
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-purple-950/40 to-slate-950 border border-purple-500/40 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-purple-300 font-bold block">معدل تقييم الصالون:</span>
+          <div class="flex items-center gap-2 mt-1">
+            <strong class="text-3xl font-black text-white" id="modal-reviews-avg">4.9</strong>
+            <span class="text-amber-400 text-lg">⭐⭐⭐⭐⭐</span>
+          </div>
+          <span class="text-[10px] text-slate-400" id="modal-reviews-count">بناءً على 0 تقييم حقيقي</span>
+        </div>
+        <button onclick="loadReviewsData()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-slate-700">
+          <span>🔄</span> تحديث
+        </button>
+      </div>
+
+      <!-- Reviews list -->
+      <div class="space-y-2">
+        <span class="text-xs font-bold text-slate-300 block">آخر آراء وشكاوى الزبائن:</span>
+        <div id="reviews-items-list" class="space-y-2 max-h-64 overflow-y-auto custom-scroll p-1">
+          <!-- Dynamically loaded -->
+        </div>
+      </div>
+
+      <button onclick="closeReviewsModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition">
+        إغلاق
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 11: MONTHLY ANALYTICS & EXCEL EXPORT (الأرشيف والتقارير الشهرية) -->
+  <div id="monthly-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scroll p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">📊</span>
+          <div>
+            <h3 class="font-black text-white text-sm">الأرشيف والحصيلة الشهرية (Bilan Mensuel)</h3>
+            <p class="text-[10px] text-slate-400">إجمالي المداخيل، المصاريف، وصافي الربح لآخر 30 يوماً</p>
+          </div>
+        </div>
+        <button onclick="closeMonthlyModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div class="grid grid-cols-2 gap-2 text-center text-xs">
+        <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800">
+          <span class="text-slate-400 block text-[10px]">إجمالي المداخيل (Chiffre d'Affaires):</span>
+          <strong class="text-lg font-black text-amber-400 block mt-1" id="monthly-rev-label">0 د.ج</strong>
+          <span class="text-[9px] text-slate-500" id="monthly-clients-label">0 حلاقة</span>
+        </div>
+        <div class="p-3 rounded-2xl bg-rose-950/40 border border-rose-500/30">
+          <span class="text-rose-300 block text-[10px]">مصاريف الصندوق (Sorties Caisse):</span>
+          <strong class="text-lg font-black text-rose-400 block mt-1" id="monthly-exp-label">-0 د.ج</strong>
+          <span class="text-[9px] text-slate-400">شفرات، قهوة، نظافة...</span>
+        </div>
+      </div>
+
+      <!-- Net Profit Highlight -->
+      <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 border-2 border-emerald-500 text-center space-y-0.5">
+        <span class="text-[11px] text-emerald-300 font-bold block">الربح الصافي الحقيقي للصالون (Net Réel):</span>
+        <strong class="text-2xl sm:text-3xl font-black text-emerald-400 block" id="monthly-net-label">0 د.ج</strong>
+      </div>
+
+      <!-- Excel Export Button -->
+      <a id="monthly-excel-download-btn" href="/api/barber/export/csv/{{ salon_id }}" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
+        <span>📥</span> تحميل تقرير الحسابات بصيغة Excel (CSV)
+      </a>
+
+      <!-- Daily breakdown list -->
+      <div class="space-y-1.5">
+        <span class="text-xs font-bold text-slate-300 block">سجل الأيام السابقة:</span>
+        <div id="monthly-daily-list" class="space-y-1.5 max-h-48 overflow-y-auto custom-scroll text-xs">
+          <!-- Dynamically loaded -->
+        </div>
+      </div>
+
+      <button onclick="closeMonthlyModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition">
+        إغلاق
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 12: PACK 3AROUS & VIP EVENTS (حجوزات العرسان والمناسبات) -->
+  <div id="groom-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scroll p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">👑</span>
+          <div>
+            <h3 class="font-black text-white text-sm">حجوزات باقات العرسان والمناسبات (Pack Marié VIP)</h3>
+            <p class="text-[10px] text-slate-400">مواعيد خاصة للعرسان مع تثبيت العربون والتوقيت</p>
+          </div>
+        </div>
+        <button onclick="closeGroomModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div id="groom-appointments-list" class="space-y-2 max-h-72 overflow-y-auto custom-scroll">
+        <!-- Dynamically loaded -->
+      </div>
+
+      <button onclick="closeGroomModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition">
+        إغلاق
+      </button>
+    </div>
+  </div>
+
+  <!-- THERMAL RECEIPT PRINTABLE AREA (مخصص للطابعات الحرارية 58mm/80mm) -->
+  <div id="thermal-receipt-area" style="display: none;">
+    <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px;">
+      <h2 style="margin: 0; font-size: 15px; font-weight: bold;" id="rcpt-salon-name">{{ salon.name if salon else 'صالون الأناقة' }}</h2>
+      <p style="margin: 2px 0; font-size: 10px;" id="rcpt-salon-sub">{{ salon.commune if salon else 'باب الزوار' }} - {{ salon.wilaya if salon else 'الجزائر العاصمة' }}</p>
+      <p style="margin: 2px 0; font-size: 10px;" id="rcpt-salon-phone">هاتف: {{ salon.phone if salon else '0555123456' }}</p>
+    </div>
+
+    <div style="margin-bottom: 6px; font-size: 10px; border-bottom: 1px dashed #000; padding-bottom: 6px;">
+      <div style="display: flex; justify-content: space-between;">
+        <span>رقم التذكرة:</span>
+        <strong id="rcpt-ticket-num">#1</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>الزبون:</span>
+        <strong id="rcpt-client-name">ياسين</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>التاريخ والوقت:</span>
+        <span id="rcpt-date-time">2026-11-19 21:00</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>الحلاق المسند:</span>
+        <span id="rcpt-barber-name">المعلم كمال</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 6px; font-size: 10px; border-bottom: 1px dashed #000; padding-bottom: 6px;">
+      <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 4px;">
+        <span>الخدمة</span>
+        <span>السعر</span>
+      </div>
+      <div id="rcpt-services-rows"></div>
+    </div>
+
+    <div style="margin-bottom: 8px; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between;">
+      <span>الإجمالي للدفع:</span>
+      <span id="rcpt-total-price">500 د.ج</span>
+    </div>
+
+    <div style="text-align: center; font-size: 9px; line-height: 1.4;">
+      <p style="margin: 3px 0;">بصحتك الحلاقة وشرفتنا بزيارتك! 💈</p>
+      <p style="margin: 2px 0;">تابع دورك عبر الإنترنت: <strong>دورك (BarberQueue)</strong></p>
+    </div>
+  </div>
+
+  <!-- Audio Tone Synthesizer -->
+  <script>
+    let audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+    document.addEventListener('click', () => getAudioContext(), { once: true });
+    document.addEventListener('touchstart', () => getAudioContext(), { once: true });
+
+    function playAudioTone(freq, type = 'sine', duration = 0.3) {
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (e) {}
+    }
+    function playDingDong() {
+      playAudioTone(659, 'sine', 0.2);
+      setTimeout(() => playAudioTone(880, 'sine', 0.35), 180);
+    }
+  </script>
+
+  <!-- Barber Screen Logic -->
+  <script>
+    const SALON_ID = '{{ salon_id }}';
+    let salonData = null;
+    let queueData = null;
+    let chairsData = {
+      chairs: {{ chairs|tojson if chairs else '[]' }},
+      total_revenue: {{ total_revenue|default(0) }},
+      total_haircuts: {{ total_haircuts|default(0) }},
+      chairs_count: {{ chairs_count|default(0) }}
+    };
+    let activeChair = 1;
+    let isEidMode = false;
+    let isMegaMode = false;
+    let currentSettlement = null;
+    let lastWaitingCount = null;
+    let toastTimeout = null;
+
+    function showNewBookingToast(name, desc, targetSalonId) {
+      const toast = document.getElementById('new-booking-toast');
+      const title = document.getElementById('toast-booking-title');
+      const descEl = document.getElementById('toast-booking-desc');
+      const actionBtn = document.getElementById('toast-action-btn');
+      if (!toast) return;
+
+      if (title) title.textContent = `🔔 حجز جديد: ${name || 'زبون جديد'}!`;
+      if (descEl) descEl.textContent = desc || 'قام بحجز دوره الآن في الطابور';
+
+      if (actionBtn) {
+        if (targetSalonId && targetSalonId !== SALON_ID) {
+          actionBtn.innerHTML = '💈 الانتقال لصالون الحجز ➔';
+          actionBtn.onclick = () => { location.href = '/barber/' + targetSalonId; };
+        } else {
+          actionBtn.innerHTML = '💺 إدخال للكرسي';
+          actionBtn.onclick = () => { 
+            if (chairsData && chairsData.chairs && chairsData.chairs.length > 0) {
+              chairCallNext(chairsData.chairs[0].id);
+            } else {
+              callNextClient(); 
+            }
+            dismissToast(); 
+          };
+        }
+      }
+
+      toast.classList.remove('hidden');
+      playDingDong();
+      if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 400]);
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        dismissToast();
+      }, 12000);
+    }
+
+    function dismissToast() {
+      const toast = document.getElementById('new-booking-toast');
+      if (toast) toast.classList.add('hidden');
+    }
+
+    async function loadBarberData() {
+      try {
+        const [salonRes, queueRes, chairsRes] = await Promise.all([
+          fetch(`/api/salon/${SALON_ID}`),
+          fetch(`/api/queue/${SALON_ID}`),
+          fetch(`/api/barber/chairs/${SALON_ID}`)
+        ]);
+        salonData = await salonRes.json();
+        queueData = await queueRes.json();
+        if (chairsRes.ok) {
+          chairsData = await chairsRes.json();
+        }
+
+        // Quick chairs indicator in toolbar
+        const quickIndicator = document.getElementById('quick-chairs-indicator');
+        if (quickIndicator && chairsData && chairsData.chairs) {
+          const occupiedCount = chairsData.chairs.filter(c => c.current_client).length;
+          quickIndicator.textContent = `${chairsData.chairs.length} كراسي (${occupiedCount} مشغول)`;
+        }
+
+        // Check for new incoming booking in polling
+        if (lastWaitingCount !== null && queueData.waiting_count > lastWaitingCount) {
+          const newest = queueData.waiting[queueData.waiting.length - 1];
+          if (newest) {
+            const srvNames = newest.services ? newest.services.map(s => s.name).join(' + ') : 'خدمات حلاقة';
+            showNewBookingToast(newest.customer_name, `${srvNames} • ${newest.total_service_price} د.ج`);
+          }
+        }
+        lastWaitingCount = queueData.waiting_count;
+
+        renderChairsBay();
+        renderChairsLeaderboard();
+        renderQueueList();
+        // wholesale removed
+        updateShopStatusButton();
+        updateBarberCrowdUI(queueData.crowd, queueData.waiting_count);
+      } catch (err) {
+        console.error('Error loading barber data:', err);
+      }
+    }
+
+    function updateShopStatusButton() {
+      if (!queueData) return;
+      const banner = document.getElementById('shop-status-banner');
+      const icon = document.getElementById('shop-status-icon');
+      const text = document.getElementById('shop-status-text');
+      const pill = document.getElementById('shop-status-pill');
+      const desc = document.getElementById('shop-status-desc');
+      const btn = document.getElementById('shop-status-action-btn');
+
+      if (!banner) return;
+
+      if (queueData.shop_status === 'open') {
+        banner.className = 'p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/70 to-slate-900 border-2 border-emerald-500/50 flex flex-wrap items-center justify-between gap-3 shadow-lg transition';
+        if (icon) icon.textContent = '🟢';
+        if (text) text.textContent = 'حالة الصالون: مفتوح الآن';
+        if (pill) {
+          pill.textContent = 'استقبال الزبائن نشط';
+          pill.className = 'text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold';
+        }
+        if (desc) desc.textContent = 'الزبائن يمكنهم حجز أدوارهم عبر هواتفهم ودخول الطابور الآن';
+        if (btn) {
+          btn.innerHTML = '<span>🔒</span> إغلاق الصالون';
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-black transition shadow flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/40';
+        }
+      } else {
+        banner.className = 'p-3.5 rounded-2xl bg-gradient-to-r from-rose-950/70 to-slate-900 border-2 border-rose-500/50 flex flex-wrap items-center justify-between gap-3 shadow-lg transition';
+        if (icon) icon.textContent = '🔴';
+        if (text) text.textContent = 'حالة الصالون: مغلق حالياً';
+        if (pill) {
+          pill.textContent = 'الحجز متوقف';
+          pill.className = 'text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold';
+        }
+        if (desc) desc.textContent = 'الصالون مغلق ولا يستقبل زبائن جدد حالياً في الطابور';
+        if (btn) {
+          btn.innerHTML = '<span>🔓</span> فتح الصالون للزبائن';
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-black transition shadow flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        }
+      }
+      loadBannedCount();
+    }
+
+    async function setManualCrowdOverride(overrideVal) {
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/crowd-override', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID, override: overrideVal })
+        });
+        const data = await res.json();
+        loadBarberData();
+      } catch (e) {
+        console.error('Failed to set crowd override:', e);
+      }
+    }
+
+    function updateBarberCrowdUI(crowd, waitingCount) {
+      const card = document.getElementById('barber-crowd-card');
+      const iconBox = document.getElementById('barber-crowd-icon-box');
+      const title = document.getElementById('barber-crowd-title');
+      const badge = document.getElementById('barber-crowd-badge');
+      const desc = document.getElementById('barber-crowd-desc');
+      const meterBars = document.getElementById('barber-crowd-meter-bars');
+      if (!card) return;
+
+      const count = (crowd && crowd.count !== undefined) ? crowd.count : (waitingCount || 0);
+      const level = crowd ? crowd.level : (count === 0 ? 'empty' : count <= 1 ? 'low' : count <= 3 ? 'medium' : 'high');
+      const currentOverride = (crowd && crowd.override) ? crowd.override : 'auto';
+      const isManual = (crowd && crowd.is_manual) ? crowd.is_manual : (currentOverride !== 'auto');
+
+      // Update override buttons styling
+      ['auto', 'low', 'medium', 'high'].forEach(key => {
+        const btn = document.getElementById(`override-btn-${key}`);
+        if (btn) {
+          if (key === currentOverride) {
+            if (key === 'auto') {
+              btn.className = 'px-2.5 py-1 rounded-lg text-[10px] font-black transition bg-amber-500 text-slate-950 shadow';
+            } else if (key === 'low') {
+              btn.className = 'px-2.5 py-1 rounded-lg text-[10px] font-black transition bg-emerald-600 text-white shadow';
+            } else if (key === 'medium') {
+              btn.className = 'px-2.5 py-1 rounded-lg text-[10px] font-black transition bg-amber-600 text-white shadow';
+            } else if (key === 'high') {
+              btn.className = 'px-2.5 py-1 rounded-lg text-[10px] font-black transition bg-rose-600 text-white shadow animate-pulse';
+            }
+          } else {
+            btn.className = 'px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white transition';
+          }
+        }
+      });
+
+      const tag = document.getElementById('crowd-override-status-tag');
+      if (tag) {
+        if (isManual) {
+          const label = (currentOverride === 'low') ? 'خفيف' : (currentOverride === 'medium') ? 'شوية زبائن' : 'زحمة بزاف';
+          tag.textContent = `⚡ تحكم يدوي مفعل (${label})`;
+          tag.className = 'text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold animate-pulse';
+        } else {
+          tag.textContent = 'وضع تلقائي (حسب الطابور)';
+          tag.className = 'text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-bold';
+        }
+      }
+
+      if (level === 'empty' || level === 'low') {
+        if (iconBox) {
+          iconBox.textContent = '🟢';
+          iconBox.className = 'w-10 h-10 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xl shrink-0 font-bold shadow-inner';
+        }
+        if (title) title.textContent = (count === 0 && !isManual) ? 'ضغط الصالون: خفيف وفارغ (0 زبائن)' : 'ضغط الصالون: خفيف ومريح (زبائن قلال)';
+        if (badge) {
+          badge.textContent = (count === 0 && !isManual) ? '🟢 فارغ' : '🟢 خفيف';
+          badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        }
+        if (desc) desc.textContent = isManual 
+          ? 'تم تثبيت حالة المحل يدوياً على (خفيف ومريح للزبائن).'
+          : ((count === 0) ? 'الكرسي شاغر ولا يوجد زبائن بالانتظار. وتيرة العمل هادئة ومريحة.' : 'يوجد زبون واحد فقط. وتيرة العمل منتظمة ومريحة.');
+        if (meterBars) {
+          meterBars.innerHTML = `
+            <span class="h-2 w-4 rounded-full bg-emerald-500"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+          `;
+        }
+      } else if (level === 'medium') {
+        if (iconBox) {
+          iconBox.textContent = '🟡';
+          iconBox.className = 'w-10 h-10 rounded-xl bg-amber-950 text-amber-400 border border-amber-500/40 flex items-center justify-center text-xl shrink-0 font-bold shadow-inner';
+        }
+        if (title) title.textContent = `ضغط الصالون: حركة وإقبال متوسط (${count} زبائن)`;
+        if (badge) {
+          badge.textContent = `🟡 شوية زبائن (${count})`;
+          badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        }
+        if (desc) desc.textContent = isManual 
+          ? 'تم تثبيت حالة المحل يدوياً على (حركة وإقبال متوسط).'
+          : `يوجد ${count} زبائن في قائمة الانتظار. إقبال معتدل ومنتظم.`;
+        if (meterBars) {
+          meterBars.innerHTML = `
+            <span class="h-2 w-4 rounded-full bg-amber-500"></span>
+            <span class="h-2 w-4 rounded-full bg-amber-500"></span>
+            <span class="h-2 w-4 rounded-full bg-amber-500"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+            <span class="h-2 w-4 rounded-full bg-slate-800"></span>
+          `;
+        }
+      } else {
+        if (iconBox) {
+          iconBox.textContent = '🔴';
+          iconBox.className = 'w-10 h-10 rounded-xl bg-rose-950 text-rose-400 border border-rose-500 flex items-center justify-center text-xl shrink-0 font-bold shadow-inner animate-pulse';
+        }
+        if (title) title.textContent = `ضغط الصالون: ذروة واكتظاظ كبير! (${count} زبائن)`;
+        if (badge) {
+          badge.textContent = `🔴 زحمة بزاف (${count} زبائن)`;
+          badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white shadow animate-pulse';
+        }
+        if (desc) desc.textContent = isManual
+          ? 'تم تثبيت حالة المحل يدوياً على (زحمة واكتظاظ كبير). الزبائن يرون تنبيهاً بالانتظار.'
+          : `⚠️ المحل راه مشجي بزاف وفيه ${count} زبائن! يمكنك تفعيل وضع "🚀 ضغط الأعياد" لتسريع وتيرة العمل.`;
+        if (meterBars) {
+          meterBars.innerHTML = `
+            <span class="h-2 w-4 rounded-full bg-rose-500"></span>
+            <span class="h-2 w-4 rounded-full bg-rose-500"></span>
+            <span class="h-2 w-4 rounded-full bg-rose-500"></span>
+            <span class="h-2 w-4 rounded-full bg-rose-500"></span>
+            <span class="h-2 w-4 rounded-full bg-rose-500"></span>
+          `;
+        }
+      }
+    }
+
+    function switchChair(chairNum) {
+      activeChair = chairNum;
+      playDingDong();
+    }
+
+    function renderChairsBay() {
+      if (!chairsData || !chairsData.chairs) return;
+      const container = document.getElementById('chairs-grid-container');
+      const countBadge = document.getElementById('chairs-count-badge');
+      if (!container) return;
+
+      if (countBadge) {
+        countBadge.textContent = `${chairsData.chairs.length} كراسي نشطة`;
+      }
+
+      container.innerHTML = '';
+
+      const waitingList = (queueData && queueData.waiting) ? queueData.waiting : [];
+      const firstWaiting = waitingList.length > 0 ? waitingList[0] : null;
+
+      chairsData.chairs.forEach((chair) => {
+        const isOccupied = !!chair.current_client;
+        const client = chair.current_client;
+        const isMainChair = (chair.chair_number === 1);
+
+        const card = document.createElement('div');
+        card.className = `p-4 sm:p-5 rounded-3xl border-2 transition-all duration-300 relative flex flex-col justify-between ${
+          isOccupied 
+            ? 'bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 border-emerald-500 shadow-xl shadow-emerald-950/40' 
+            : 'bg-slate-950/90 border-slate-800 hover:border-slate-700 shadow-lg'
+        }`;
+
+        // Header of chair card
+        let deleteBtnHtml = '';
+        if (!isMainChair) {
+          deleteBtnHtml = `
+            <button onclick="chairDelete('${chair.id}', ${chair.chair_number})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 text-xs transition" title="حذف هذا الكرسي">
+              🗑️
+            </button>
+          `;
+        }
+
+        const occupancyPill = isOccupied
+          ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-bold animate-pulse flex items-center gap-1.5">
+               <span class="w-2 h-2 rounded-full bg-emerald-400"></span> مشغول حالياً
+             </span>`
+          : `<span class="text-[10px] bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5">
+               <span class="w-2 h-2 rounded-full bg-slate-500"></span> شاغر ومتاح
+             </span>`;
+
+        // Client section
+        let bodyHtml = '';
+        let actionBtnHtml = '';
+
+        if (isOccupied) {
+          const srvList = client.services ? client.services.map(s => s.name).join(' + ') : 'حلاقة شعر';
+          const prodBadge = (client.ordered_products && client.ordered_products.length > 0)
+            ? `<div class="mt-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-bold inline-block">
+                 📦 سلمه: ${client.ordered_products.map(p => p.name).join(', ')}
+               </div>`
+            : '';
+
+          let clientBadges = '';
+          if (client.loyalty_visits && client.loyalty_visits > 1) {
+            clientBadges += `<span class="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded font-black">👑 زبون وفي (#${client.loyalty_visits})</span>`;
+          }
+          if (client.preferred_barber_name && client.preferred_chair_id) {
+            clientBadges += `<span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold">✂️ طلب: ${client.preferred_barber_name}</span>`;
+          }
+          if (client.hair_style_note) {
+            clientBadges += `<span class="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded font-bold truncate max-w-[150px]">📝 ${client.hair_style_note}</span>`;
+          }
+          if (client.payment_method === 'baridimob') {
+            clientBadges += `<span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-black">📱 بريدي موب</span>`;
+          }
+
+          const clientPrice = client.total_service_price || 0;
+
+          bodyHtml = `
+            <div class="space-y-1.5 my-3">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <span class="text-[10px] text-emerald-400 block font-bold">الزبون على الكرسي الآن:</span>
+                  <h3 class="text-xl font-black text-white">${client.customer_name}</h3>
+                  <p class="text-xs text-slate-300 mt-0.5">${srvList}</p>
+                  <span class="text-[10px] text-slate-400 font-mono">${client.customer_phone || ''}</span>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    ${clientBadges}
+                  </div>
+                  ${prodBadge}
+                </div>
+                <div class="text-left bg-slate-950 p-2.5 rounded-2xl border border-slate-800 shrink-0">
+                  <span class="text-[10px] text-slate-400 block">المبلغ الإجمالي</span>
+                  <span class="text-lg font-black text-amber-400">${clientPrice.toLocaleString()} د.ج</span>
+                </div>
+              </div>
+
+              <!-- 💵 Calculateur de Monnaie (حاسبة الفراطة السريعة) -->
+              <div class="mt-2.5 pt-2 border-t border-slate-800/80 space-y-1">
+                <div class="flex items-center justify-between text-[10px]">
+                  <span class="text-slate-400 font-bold">حاسبة الفراطة (Monnaie):</span>
+                  <span id="change-result-${chair.id}" class="text-emerald-400 font-black"></span>
+                </div>
+                <div class="grid grid-cols-3 gap-1">
+                  <button type="button" onclick="calculateQuickChange('${chair.id}', 1000, ${clientPrice})" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded-lg text-[10px] font-bold border border-slate-800">
+                    مدلي 1,000
+                  </button>
+                  <button type="button" onclick="calculateQuickChange('${chair.id}', 2000, ${clientPrice})" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded-lg text-[10px] font-bold border border-slate-800">
+                    مدلي 2,000
+                  </button>
+                  <button type="button" onclick="calculateQuickChange('${chair.id}', 3000, ${clientPrice})" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded-lg text-[10px] font-bold border border-slate-800">
+                    مدلي 3,000
+                  </button>
+                </div>
+              </div>
+
+              <!-- 💈 In-Chair Quick Product Upsell (بيع المنتجات بلمسة واحدة فوق الكرسي) -->
+              <div class="mt-2.5 pt-2 border-t border-slate-800/80 space-y-1">
+                <div class="flex items-center justify-between text-[10px]">
+                  <span class="text-amber-300 font-bold flex items-center gap-1">
+                    <span>✨</span> إضافة منتج للزبون على الكرسي (+ عمولة 200 د.ج):
+                  </span>
+                  <span class="text-[9px] text-emerald-400 font-bold">بلمسة واحدة</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 mt-1">
+                  <button type="button" onclick="addChairProduct('${chair.id}', 'prod_wax')" class="px-2.5 py-1 bg-gradient-to-r from-amber-950/80 to-slate-900 hover:from-amber-900 text-amber-300 border border-amber-500/40 rounded-xl text-[10px] font-bold transition flex items-center gap-1 active:scale-95 shadow" title="إضافة واكس مطفي للتذكرة">
+                    <span>🍯</span> + واكس (1,000 د.ج)
+                  </button>
+                  <button type="button" onclick="addChairProduct('${chair.id}', 'prod_oil')" class="px-2.5 py-1 bg-gradient-to-r from-amber-950/80 to-slate-900 hover:from-amber-900 text-amber-300 border border-amber-500/40 rounded-xl text-[10px] font-bold transition flex items-center gap-1 active:scale-95 shadow" title="إضافة زيت لحية فاخر للتذكرة">
+                    <span>💧</span> + زيت لحية (1,200 د.ج)
+                  </button>
+                  <button type="button" onclick="addChairProduct('${chair.id}', 'prod_powder')" class="px-2.5 py-1 bg-gradient-to-r from-amber-950/80 to-slate-900 hover:from-amber-900 text-amber-300 border border-amber-500/40 rounded-xl text-[10px] font-bold transition flex items-center gap-1 active:scale-95 shadow" title="إضافة بودرة تكثيف للتذكرة">
+                    <span>💨</span> + بودرة (1,200 د.ج)
+                  </button>
+                  <button type="button" onclick="addChairProduct('${chair.id}', 'prod_cologne')" class="px-2.5 py-1 bg-gradient-to-r from-amber-950/80 to-slate-900 hover:from-amber-900 text-amber-300 border border-amber-500/40 rounded-xl text-[10px] font-bold transition flex items-center gap-1 active:scale-95 shadow" title="إضافة كولونيا معقمة للتذكرة">
+                    <span>❄️</span> + كولونيا (600 د.ج)
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          actionBtnHtml = `
+            <div class="flex items-center gap-2">
+              <button onclick="chairComplete('${chair.id}')" class="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-black text-sm rounded-2xl shadow-xl flex items-center justify-center gap-2 transition">
+                <span>✓</span> إنهاء الحلاقة (${clientPrice.toLocaleString()} د.ج)
+              </button>
+              <button onclick="printThermalReceipt('${chair.id}')" class="px-3.5 py-3.5 bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-300 font-bold text-xs rounded-2xl border border-slate-700 transition" title="طباعة وصل حراري (Ticket)">
+                🖨️
+              </button>
+            </div>
+          `;
+        } else {
+          // Empty chair
+          if (firstWaiting) {
+            const srvNames = firstWaiting.services ? firstWaiting.services.map(s => s.name).join(' + ') : 'حلاقة';
+            bodyHtml = `
+              <div class="space-y-1.5 my-3 p-3 rounded-2xl bg-slate-900 border border-amber-500/30">
+                <span class="text-[10px] text-amber-400 font-bold block">التالي في قائمة الانتظار:</span>
+                <div class="flex items-center justify-between">
+                  <strong class="text-sm font-black text-white">${firstWaiting.customer_name}</strong>
+                  <span class="text-xs font-black text-amber-400">${firstWaiting.total_service_price ? firstWaiting.total_service_price.toLocaleString() : 0} د.ج</span>
+                </div>
+                <span class="text-[10px] text-slate-400 block truncate">${srvNames}</span>
+              </div>
+            `;
+
+            actionBtnHtml = `
+              <button onclick="chairCallNext('${chair.id}')" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-98 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 transition animate-pulse">
+                <span>💺</span> إدخال (${firstWaiting.customer_name}) للكرسي الآن
+              </button>
+            `;
+          } else {
+            bodyHtml = `
+              <div class="my-4 py-4 text-center">
+                <span class="text-3xl block mb-1">💺</span>
+                <strong class="text-xs text-slate-300 block">الكرسي شاغر وجاهز</strong>
+                <span class="text-[10px] text-slate-500">لا يوجد زبائن بالانتظار في الطابور حالياً</span>
+              </div>
+            `;
+
+            actionBtnHtml = `
+              <button disabled class="w-full py-3 bg-slate-800/80 text-slate-500 font-bold text-xs rounded-2xl border border-slate-700/40 flex items-center justify-center gap-2 cursor-not-allowed">
+                <span>⚪</span> بانتظار زبائن في الطابور
+              </button>
+            `;
+          }
+        }
+
+        // Mini stats in card footer
+        const miniStatsHtml = `
+          <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+            <span class="flex items-center gap-1 font-bold">
+              <span>✂️ حلاقات اليوم:</span>
+              <strong class="text-white">${chair.today_haircuts || 0}</strong>
+            </span>
+            <span class="flex items-center gap-1 font-bold">
+              <span>💵 مدخول الكرسي:</span>
+              <strong class="text-amber-400">${(chair.today_revenue || 0).toLocaleString()} د.ج</strong>
+            </span>
+          </div>
+        `;
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">💺</span>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <strong class="text-xs sm:text-sm font-black text-white">كرسي ${chair.chair_number}</strong>
+                    <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold">
+                      ${chair.commission_rate}% نسبة
+                    </span>
+                  </div>
+                  <span class="text-[11px] text-slate-300">${chair.barber_name}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                ${occupancyPill}
+                ${deleteBtnHtml}
+              </div>
+            </div>
+
+            ${bodyHtml}
+          </div>
+
+          <div>
+            ${actionBtnHtml}
+            ${miniStatsHtml}
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function renderChairsLeaderboard() {
+      if (!chairsData || !chairsData.chairs) return;
+      const chairs = chairsData.chairs;
+
+      // 1. Top by haircuts
+      const topHaircuts = chairs.reduce((prev, curr) => (curr.today_haircuts > (prev ? prev.today_haircuts : -1)) ? curr : prev, null);
+      // 2. Top by revenue
+      const topRevenue = chairs.reduce((prev, curr) => (curr.today_revenue > (prev ? prev.today_revenue : -1)) ? curr : prev, null);
+
+      const hcChairName = document.getElementById('top-haircuts-chair-name');
+      const hcBarberName = document.getElementById('top-haircuts-barber-name');
+      const hcCount = document.getElementById('top-haircuts-count');
+
+      if (hcChairName && topHaircuts) {
+        hcChairName.textContent = `كرسي ${topHaircuts.chair_number}`;
+        if (hcBarberName) hcBarberName.textContent = topHaircuts.barber_name;
+        if (hcCount) hcCount.textContent = topHaircuts.today_haircuts;
+      }
+
+      const revChairName = document.getElementById('top-revenue-chair-name');
+      const revBarberName = document.getElementById('top-revenue-barber-name');
+      const revAmount = document.getElementById('top-revenue-amount');
+
+      if (revChairName && topRevenue) {
+        revChairName.textContent = `كرسي ${topRevenue.chair_number}`;
+        if (revBarberName) revBarberName.textContent = topRevenue.barber_name;
+        if (revAmount) revAmount.textContent = `${(topRevenue.today_revenue || 0).toLocaleString()} د.ج`;
+      }
+
+      // Total rev label
+      const totalRevLabel = document.getElementById('chairs-total-rev-label');
+      if (totalRevLabel) {
+        totalRevLabel.textContent = `الإجمالي: ${(chairsData.total_revenue || 0).toLocaleString()} د.ج (${chairsData.total_haircuts || 0} حلاقة)`;
+      }
+
+      // 3. Multi-bar segments & legend
+      const barContainer = document.getElementById('chairs-revenue-bar');
+      const legendContainer = document.getElementById('chairs-revenue-legend');
+      const palette = [
+        { bg: 'bg-emerald-500', text: 'text-emerald-400', hex: '#10b981' },
+        { bg: 'bg-amber-500', text: 'text-amber-400', hex: '#f59e0b' },
+        { bg: 'bg-blue-500', text: 'text-blue-400', hex: '#3b82f6' },
+        { bg: 'bg-purple-500', text: 'text-purple-400', hex: '#a855f7' },
+        { bg: 'bg-teal-500', text: 'text-teal-400', hex: '#14b8a6' },
+        { bg: 'bg-rose-500', text: 'text-rose-400', hex: '#f43f5e' }
+      ];
+
+      if (barContainer && legendContainer) {
+        barContainer.innerHTML = '';
+        legendContainer.innerHTML = '';
+
+        if (chairsData.total_revenue > 0) {
+          chairs.forEach((c, idx) => {
+            const color = palette[idx % palette.length];
+            const pct = c.revenue_percentage || 0;
+            if (pct > 0) {
+              const seg = document.createElement('div');
+              seg.className = `h-full ${color.bg} transition-all duration-500`;
+              seg.style.width = `${pct}%`;
+              seg.title = `كرسي ${c.chair_number} (${c.barber_name}): ${pct}%`;
+              barContainer.appendChild(seg);
+            }
+
+            const leg = document.createElement('div');
+            leg.className = 'flex items-center gap-1.5';
+            leg.innerHTML = `
+              <span class="w-2.5 h-2.5 rounded-full ${color.bg}"></span>
+              <span class="text-white font-bold">كرسي ${c.chair_number} (${c.barber_name}):</span>
+              <span class="${color.text} font-bold">${pct}% • ${c.today_revenue.toLocaleString()} د.ج</span>
+            `;
+            legendContainer.appendChild(leg);
+          });
+        } else {
+          barContainer.innerHTML = '<div class="h-full w-full bg-slate-800 text-center text-[9px] text-slate-500 flex items-center justify-center">في انتظار تسجيل أول مدخول لليوم</div>';
+          legendContainer.innerHTML = '<span class="text-slate-500 text-[10px]">لا توجد مداخيل مسجلة لليوم بعد.</span>';
+        }
+      }
+
+      // 4. Breakdown Cards (Le Pourcentage: نصيب الحلاق ونصيب المحل)
+      const breakdownList = document.getElementById('chairs-breakdown-list');
+      if (breakdownList) {
+        breakdownList.innerHTML = '';
+
+        chairs.forEach((c, idx) => {
+          const color = palette[idx % palette.length];
+          const isTopHaircuts = (c.rank_haircuts === 1 && c.today_haircuts > 0);
+          const isTopRevenue = (c.rank_revenue === 1 && c.today_revenue > 0);
+
+          let badgesHtml = '';
+          if (isTopHaircuts && isTopRevenue) {
+            badgesHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-emerald-500 text-slate-950 shadow">👑 ✂️ بطل اليوم المتصدر</span>`;
+          } else if (isTopHaircuts) {
+            badgesHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40">✂️ الأكثر عملاً (المركز 1)</span>`;
+          } else if (isTopRevenue) {
+            badgesHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">👑 بطل المداخيل (المركز 1)</span>`;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5';
+          card.innerHTML = `
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full ${color.bg}"></span>
+                <strong class="text-white text-xs sm:text-sm">كرسي ${c.chair_number}: ${c.barber_name}</strong>
+              </div>
+              <div class="flex items-center gap-1.5">
+                ${badgesHtml}
+                <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-bold">
+                  ${c.today_haircuts} حلاقة
+                </span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+              <!-- Total Gross -->
+              <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                <span class="text-[10px] text-slate-400 block">إجمالي الدخل</span>
+                <strong class="text-xs sm:text-sm font-black text-amber-400 mt-0.5 block">${(c.today_revenue || 0).toLocaleString()} د.ج</strong>
+              </div>
+
+              <!-- Barber Share -->
+              <div class="p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/30">
+                <span class="text-[10px] text-emerald-400 font-bold block">نصيب الحلاق (${c.commission_rate}%)</span>
+                <strong class="text-xs sm:text-sm font-black text-emerald-300 mt-0.5 block">${(c.barber_share || 0).toLocaleString()} د.ج</strong>
+              </div>
+
+              <!-- Salon Share -->
+              <div class="p-2 rounded-xl bg-blue-950/40 border border-blue-500/30">
+                <span class="text-[10px] text-blue-400 font-bold block">نصيب الصالون (${100 - c.commission_rate}%)</span>
+                <strong class="text-xs sm:text-sm font-black text-blue-300 mt-0.5 block">${(c.salon_share || 0).toLocaleString()} د.ج</strong>
+              </div>
+            </div>
+          `;
+          breakdownList.appendChild(card);
+        });
+      }
+    }
+
+    async function chairCallNext(chairId) {
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/chairs/call-next', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID, chair_id: chairId })
+        });
+        await res.json();
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function chairComplete(chairId) {
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/chairs/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID, chair_id: chairId })
+        });
+        await res.json();
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function chairDelete(chairId, chairNum) {
+      if (!confirm(`هل أنت متأكد من حذف كرسي رقم ${chairNum} نهائياً من الصالون؟`)) return;
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/chairs/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID, chair_id: chairId })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+        } else {
+          loadBarberData();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function openAddChairModal() {
+      document.getElementById('add-chair-modal').classList.remove('hidden');
+      const input = document.getElementById('new-chair-barber-name');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    function closeAddChairModal() {
+      document.getElementById('add-chair-modal').classList.add('hidden');
+    }
+
+    async function submitAddNewChair() {
+      const barberName = document.getElementById('new-chair-barber-name').value.trim();
+      const comm = parseFloat(document.getElementById('new-chair-commission').value) || 50.0;
+
+      if (!barberName) {
+        alert('يرجى كتابة اسم الحلاق المسؤول عن هذا الكرسي');
+        return;
+      }
+
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/chairs/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            barber_name: barberName,
+            commission_rate: comm
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+        } else {
+          closeAddChairModal();
+          loadBarberData();
+          alert(`✨ ${data.message || 'تمت إضافة الكرسي بنجاح!'}`);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderQueueList() {
+      if (!queueData) return;
+      const listEl = document.getElementById('barber-queue-list');
+      listEl.innerHTML = '';
+
+      document.getElementById('queue-count-badge').textContent = `${queueData.waiting_count} زبائن`;
+
+      if (queueData.waiting.length === 0) {
+        listEl.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">لا يوجد زبائن في قائمة الانتظار حالياً.</div>';
+        return;
+      }
+
+
+      queueData.waiting.forEach((item, idx) => {
+        const isGrace = (item.status === 'traffic_grace');
+        const isNotified = (item.status === 'turn_notified');
+        const isArrived = (item.status === 'arrived');
+        const isNext = (idx === 0);
+
+        const card = document.createElement('div');
+        card.className = `p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+          isArrived ? 'bg-emerald-950/40 border-emerald-500' :
+          isGrace ? 'bg-amber-950/40 border-amber-500/80' :
+          isNotified ? 'bg-blue-950/40 border-blue-500/70' :
+          'bg-slate-950 border-slate-800'
+        }`;
+
+        let statusBadgeHtml = '';
+        if (isArrived) {
+          statusBadgeHtml = '<span class="text-[10px] font-bold bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full">📍 الزبون في قاعة الانتظار (جاهز للدخول)</span>';
+        } else if (isGrace) {
+          statusBadgeHtml = '<span class="text-[10px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">⏱️ حاصل في زحمة (مهلة 10د)</span>';
+        } else if (isNotified) {
+          statusBadgeHtml = '<span class="text-[10px] font-bold bg-blue-500/30 text-blue-300 border border-blue-400 px-2 py-0.5 rounded-full animate-pulse">⏳ تم إرسال تنبيه (بانتظار رده)</span>';
+        } else if (item.status === 'on_the_way') {
+          statusBadgeHtml = '<span class="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">🚗 في الطريق (5د)</span>';
+        }
+
+        // Extra badges for new features
+        let extraBadges = '';
+        if (item.loyalty_visits && item.loyalty_visits > 1) {
+          extraBadges += `<span class="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded font-black">👑 وفي (#${item.loyalty_visits})</span>`;
+        }
+        if (item.preferred_barber_name) {
+          extraBadges += `<span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold">✂️ طلب: ${item.preferred_barber_name}</span>`;
+        }
+        const styleText = item.hair_style_note || item.saved_cut;
+        if (styleText) {
+          extraBadges += `<span class="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded font-bold truncate max-w-[140px]">📝 ستايل: ${styleText}</span>`;
+        }
+        if (item.payment_method === 'baridimob') {
+          extraBadges += `<span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-black">📱 بريدي موب</span>`;
+        }
+
+        // Action Buttons for this client
+        let actionsHtml = `
+          <div class="flex items-center gap-1.5 self-end sm:self-auto flex-wrap justify-end">
+            <span class="font-black text-amber-400 text-xs ml-2">${item.total_service_price.toLocaleString()} د.ج</span>
+            <button onclick="sendWhatsAppAlert('${item.customer_phone}', '${item.customer_name}', ${idx+1})" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[10px] transition flex items-center gap-1 shadow" title="مراسلة سريعة بالواتساب">
+              <span>📲</span> واتساب
+            </button>
+        `;
+
+        // 1. ZER TANBEEH (زر تنبيه الدور اقترب)
+        if (!isArrived && !isNotified) {
+          actionsHtml += `
+            <button onclick="sendTurnNotification('${item.id}', '${item.customer_name}')" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold rounded-xl text-[10px] transition shadow flex items-center gap-1">
+              <span>🔔</span> تنبيه باقتراب الدور
+            </button>
+          `;
+        } else if (isNotified) {
+          actionsHtml += `
+            <button onclick="sendTurnNotification('${item.id}', '${item.customer_name}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-lg text-[10px] transition border border-blue-500/30">
+              إعادة التنبيه 🔔
+            </button>
+          `;
+        }
+
+        // 2. STRIKE OR FILLER SERVICE IF GRACE
+        if (isGrace) {
+          actionsHtml += `
+            <button onclick="insertQuickFiller()" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-[10px] transition shadow flex items-center gap-1">
+              <span>⚡</span> + خدمة سريعة ريثما يصل
+            </button>
+          `;
+        } else {
+          actionsHtml += `
+            <button onclick="strikeAndBlockClient('${item.id}', '${item.customer_name}', '${item.customer_phone}')" class="px-2.5 py-1.5 bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-500/50 rounded-xl text-[10px] font-black transition flex items-center gap-1 shadow" title="تسجيل غياب وحظر فوري للرقم">
+              <span>🚫</span> إنذار وحظر
+            </button>
+          `;
+        }
+
+        actionsHtml += `</div>`;
+
+        card.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-full bg-slate-800 text-slate-300 font-bold flex items-center justify-center text-xs shrink-0">#${idx+1}</span>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <strong class="text-white text-xs">${item.customer_name}</strong>
+                ${statusBadgeHtml}
+              </div>
+              <span class="text-[10px] text-slate-400 mt-0.5 block">${item.services.map(s => s.name).join(' + ')} • ${item.customer_phone}</span>
+              ${extraBadges ? `<div class="mt-1 flex flex-wrap gap-1">${extraBadges}</div>` : ''}
+            </div>
+          </div>
+          ${actionsHtml}
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    // 1. زر تنبيه باقتراب الدور (Send Turn Notification)
+    async function sendTurnNotification(ticketId, name) {
+      playDingDong();
+      try {
+        const res = await fetch('/api/queue/notify-turn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: ticketId, salon_id: SALON_ID })
+        });
+        const data = await res.json();
+        alert(data.message || `✓ تم إرسال تنبيه اقتراب الدور للزبون (${name})!`);
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // 2. إدخال خدمة سريعة ريثما يصل الزبون العالق (Filler Service)
+    async function insertQuickFiller() {
+      playDingDong();
+      await fetch('/api/queue/filler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          salon_id: SALON_ID,
+          service_name: 'خدمة سريعة ريثما يصل الزبون (تحديد/ماسك)',
+          duration: 10,
+          price: 300.0
+        })
+      });
+      alert('✓ تم تسجيل الخدمة السريعة (10 دقائق - 300 د.ج) بنجاح وإشعار الزبائن بشفافية!');
+      loadBarberData();
+    }
+
+    async function callNextClient() {
+      playDingDong();
+      try {
+        const res = await fetch('/api/queue/next', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID })
+        });
+        await res.json();
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function strikeAndBlockClient(ticketId, name, phone) {
+      if (!confirm(`هل أنت متأكد من تسجيل إنذار غياب وحظر الزبون "${name}" (${phone}) فوراً من الطابور؟`)) return;
+      playAudioTone(280, 'sawtooth', 0.4);
+      try {
+        const res = await fetch('/api/queue/strike', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: ticketId, block_now: true })
+        });
+        const data = await res.json();
+        alert(data.message || `تم حظر الزبون ${name} بنجاح!`);
+        loadBarberData();
+        loadBannedCount();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadBannedCount() {
+      try {
+        const res = await fetch('/api/customer/banned');
+        const data = await res.json();
+        const badge = document.getElementById('banned-count-badge');
+        if (badge) badge.textContent = (data.banned || []).length;
+      } catch (e) {}
+    }
+
+    async function openBannedModal() {
+      try {
+        const res = await fetch('/api/customer/banned');
+        const data = await res.json();
+        const container = document.getElementById('banned-list-container');
+        container.innerHTML = '';
+        if (!data.banned || data.banned.length === 0) {
+          container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">لا يوجد أي زبائن محظورين حالياً 👍</p>';
+        } else {
+          data.banned.forEach(b => {
+            const item = document.createElement('div');
+            item.className = 'p-3 bg-slate-950 rounded-xl border border-rose-500/30 flex items-center justify-between gap-2';
+            item.innerHTML = `
+              <div>
+                <strong class="text-white text-xs block">${b.customer_name}</strong>
+                <span class="font-mono text-slate-400 text-[11px]">${b.phone}</span>
+                <span class="text-[10px] text-rose-400 font-bold block">إنذارات الغياب: ${b.strike_count}</span>
+              </div>
+              <button onclick="unblockCustomer('${b.phone}')" class="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                <span>🔓</span> فك الحظر
+              </button>
+            `;
+            container.appendChild(item);
+          });
+        }
+        document.getElementById('banned-modal').classList.remove('hidden');
+      } catch (e) {
+        alert('تعذر تحميل قائمة المحظورين');
+      }
+    }
+
+    function closeBannedModal() {
+      document.getElementById('banned-modal').classList.add('hidden');
+    }
+
+    async function unblockCustomer(phone) {
+      if (!confirm(`هل أنت متأكد من فك الحظر عن الرقم ${phone}؟`)) return;
+      try {
+        const res = await fetch('/api/customer/unblock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phone })
+        });
+        const data = await res.json();
+        alert(data.message || 'تم فك الحظر بنجاح!');
+        openBannedModal();
+        loadBannedCount();
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function toggleShopStatus() {
+      try {
+        const res = await fetch('/api/barber/toggle-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID })
+        });
+        const data = await res.json();
+        playDingDong();
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Live Settlement Preview (Without closing shop)
+    async function openLiveSettlementModal() {
+      try {
+        const res = await fetch(`/api/barber/settlement/${SALON_ID}`);
+        const data = await res.json();
+        showSettlementData(data);
+      } catch (e) {
+        document.getElementById('settlement-modal').classList.remove('hidden');
+      }
+    }
+
+    function showSettlementData(s) {
+      currentSettlement = s;
+      const netTakeHome = (s.net_after_expenses !== undefined) ? s.net_after_expenses : s.total_barber_take_home;
+      document.getElementById('settlement-total-income').textContent = `${netTakeHome.toLocaleString()} د.ج`;
+      document.getElementById('settlement-clients-count').textContent = `${s.total_clients} زبائن (${s.app_clients} عبر التطبيق، ${s.walkin_clients} حضوري)`;
+      document.getElementById('settlement-services-rev').textContent = `${s.gross_services_revenue.toLocaleString()} د.ج`;
+      document.getElementById('settlement-products-comm').textContent = `+${s.barber_product_commission.toLocaleString()} د.ج`;
+      document.getElementById('settlement-strikes-count').textContent = `${s.no_show_strikes} إنذارات`;
+
+      const expEl = document.getElementById('settlement-expenses-total');
+      if (expEl) expEl.textContent = `-${(s.total_expenses_today || 0).toLocaleString()} د.ج`;
+
+      const netEl = document.getElementById('settlement-net-real');
+      if (netEl) netEl.textContent = `${netTakeHome.toLocaleString()} د.ج`;
+
+      document.getElementById('settlement-modal').classList.remove('hidden');
+    }
+
+    function closeSettlementModal() {
+      document.getElementById('settlement-modal').classList.add('hidden');
+    }
+
+    // WhatsApp Daily Report Share (تقرير الإغلاق اليومي للمعلّم)
+    function shareReportWhatsApp() {
+      if (!currentSettlement) return;
+      const salonName = (salonData && salonData.salon && salonData.salon.name) ? salonData.salon.name : 'صالون الأناقة الملكي';
+      const netTakeHome = (currentSettlement.net_after_expenses !== undefined) ? currentSettlement.net_after_expenses : currentSettlement.total_barber_take_home;
+      
+      let chairsText = '';
+      if (chairsData && chairsData.chairs && chairsData.chairs.length > 0) {
+        chairsText = '\n\n💺 تفصيل دخل ونشاط الكراسي اليوم:\n' + chairsData.chairs.map(c => 
+          `• كرسي ${c.chair_number} (${c.barber_name}): ${c.today_haircuts || 0} حلاقات (${(c.today_revenue || 0).toLocaleString()} د.ج)`
+        ).join('\n');
+      }
+
+      const text = `📊 تقرير الإغلاق المالي لـ ${salonName} (${currentSettlement.date}):\n\n` +
+        `✂️ إجمالي الزبائن: ${currentSettlement.total_clients || 0} زبون\n` +
+        `💵 مدخول الحلاقة: ${(currentSettlement.gross_services_revenue || 0).toLocaleString()} د.ج\n` +
+        `📱 مقبوضات بريدي موب: ${(currentSettlement.baridimob_revenue || 0).toLocaleString()} د.ج\n` +
+        `🧾 مصاريف الصندوق: -${(currentSettlement.total_expenses_today || 0).toLocaleString()} د.ج\n` +
+        `⭐ صافي الدخل الحقيقي: ${Number(netTakeHome || 0).toLocaleString()} د.ج` +
+        chairsText +
+        `\n\nتم إنشاؤه آلياً عبر تطبيق دورك 💈`;
+
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    // ==========================================
+    // ☰ SALON SLIDE-OVER DRAWER LOGIC
+    // ==========================================
+    function openSalonDrawer() {
+      const drawer = document.getElementById('salon-drawer');
+      if (drawer) drawer.classList.remove('hidden');
+    }
+
+    function closeSalonDrawer() {
+      const drawer = document.getElementById('salon-drawer');
+      if (drawer) drawer.classList.add('hidden');
+    }
+
+    // ==========================================
+    // 💡 SCREEN WAKE LOCK API (منع انطفاء الشاشة)
+    // ==========================================
+    let wakeLockSentinel = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          updateWakeLockUI(true);
+          wakeLockSentinel.addEventListener('release', () => {
+            updateWakeLockUI(false);
+          });
+        } catch (err) {
+          console.warn('Wake Lock error:', err);
+          updateWakeLockUI(false);
+        }
+      } else {
+        alert('خاصية إبقاء الشاشة مضاءة تدعمها هواتف الأندرويد ومتصفحات Chrome و Edge.');
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLockSentinel) {
+        await wakeLockSentinel.release();
+        wakeLockSentinel = null;
+        updateWakeLockUI(false);
+      }
+    }
+
+    function toggleWakeLock() {
+      if (wakeLockSentinel) {
+        releaseWakeLock();
+      } else {
+        requestWakeLock();
+      }
+    }
+
+    function updateWakeLockUI(isActive) {
+      const btn = document.getElementById('wakelock-btn');
+      const icon = document.getElementById('wakelock-icon');
+      const text = document.getElementById('wakelock-text');
+      if (!btn) return;
+      if (isActive) {
+        btn.className = 'px-3 py-2 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow';
+        if (icon) icon.textContent = '💡';
+        if (text) text.textContent = 'الشاشة مضاءة';
+      } else {
+        btn.className = 'px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition';
+        if (icon) icon.textContent = '💤';
+        if (text) text.textContent = 'شاشة عادية';
+      }
+    }
+
+    ,
+          body: JSON.stringify({ salon_id: SALON_ID, product_id: prodId })
+        });
+        const data = await res.json();
+        alert(data.message || 'تم تسجيل طلب التموين بنجاح!');
+      } catch (e) {
+        alert('تعذر تسجيل الطلب');
+      }
+    }
+
+    // Pricing Editor Modal
+    function openPricingModal() {
+      renderPricingList();
+      document.getElementById('pricing-modal').classList.remove('hidden');
+    }
+    function closePricingModal() {
+      document.getElementById('pricing-modal').classList.add('hidden');
+    }
+
+    function renderPricingList() {
+      if (!salonData) return;
+      const listEl = document.getElementById('pricing-services-list');
+      listEl.innerHTML = '';
+
+      salonData.services.forEach(srv => {
+        const row = document.createElement('div');
+        row.className = 'p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs';
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="text-lg">${srv.icon}</span>
+            <span class="text-white font-bold">${srv.name}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="srv-p-${srv.id}" type="number" value="${srv.price}" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center text-amber-400 font-bold text-xs">
+            <span class="text-[10px] text-slate-400">د.ج</span>
+            <input id="srv-d-${srv.id}" type="number" value="${srv.duration_minutes}" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-center text-blue-400 font-bold text-xs">
+            <span class="text-[10px] text-slate-400">د</span>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+    }
+
+    async function saveServicesChanges() {
+      const updated = salonData.services.map(srv => {
+        const pEl = document.getElementById(`srv-p-${srv.id}`);
+        const dEl = document.getElementById(`srv-d-${srv.id}`);
+        return {
+          id: srv.id,
+          price: pEl ? parseFloat(pEl.value) : srv.price,
+          duration_minutes: dEl ? parseInt(dEl.value) : srv.duration_minutes
+        };
+      });
+
+      playDingDong();
+      await fetch('/api/salon/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ salon_id: SALON_ID, services: updated })
+      });
+      closePricingModal();
+      loadBarberData();
+      alert('✓ تم حفظ وتحديث أسعار الخدمات بنجاح!');
+    }
+
+    async function addNewCustomService() {
+      const name = document.getElementById('new-srv-name').value.trim();
+      const price = parseFloat(document.getElementById('new-srv-price').value);
+      const dur = parseInt(document.getElementById('new-srv-dur').value);
+
+      if (!name || isNaN(price) || isNaN(dur)) {
+        alert('يرجى ملء الاسم والسعر والمدة');
+        return;
+      }
+
+      await fetch('/api/salon/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          salon_id: SALON_ID,
+          services: [{ name: name, price: price, duration_minutes: dur, is_new: true, icon: '✨' }]
+        })
+      });
+
+      document.getElementById('new-srv-name').value = '';
+      document.getElementById('new-srv-price').value = '';
+      document.getElementById('new-srv-dur').value = '';
+      loadBarberData();
+      closePricingModal();
+      alert(`✨ تم إضافة خدمة "${name}" بنجاح!`);
+    }
+
+    // ==========================================
+    // 💵 1. Calculateur de Monnaie (حاسبة الفراطة السريعة)
+    // ==========================================
+    function calculateQuickChange(chairId, tendered, price) {
+      const resultEl = document.getElementById(`change-result-${chairId}`);
+      if (!resultEl) return;
+      const change = tendered - price;
+      if (change < 0) {
+        resultEl.textContent = `ناقص ${(Math.abs(change)).toLocaleString()} د.ج`;
+        resultEl.className = 'text-rose-400 font-black';
+      } else {
+        resultEl.textContent = `الباقي: ${change.toLocaleString()} د.ج`;
+        resultEl.className = 'text-emerald-400 font-black';
+      }
+    }
+
+    // ==========================================
+    // 💈 1.5 In-Chair Quick Upsell (إضافة منتج للكرسي بنقرة واحدة)
+    // ==========================================
+    async function addChairProduct(chairId, prodId) {
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/chairs/addon-product', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            chair_id: chairId,
+            product_id: prodId
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (typeof showFastToast === 'function') {
+            showFastToast(data.message || '✨ تم بيع المنتج وإضافته للتذكرة (+ عمولتك 200 د.ج)');
+          } else {
+            alert(data.message);
+          }
+          await loadBarberData();
+          if (typeof fetchLiveSettlement === 'function') {
+            await fetchLiveSettlement();
+          }
+        } else {
+          alert(data.error || 'تعذر إضافة المنتج');
+        }
+      } catch (err) {
+        console.error('Error adding product to chair:', err);
+        alert('تعذر الاتصال بالسيرفر');
+      }
+    }
+
+    // ==========================================
+    // 📲 2. WhatsApp Direct Alert (تنبيه واتساب بنقرة واحدة)
+    // ==========================================
+    function sendWhatsAppAlert(phone, name, pos) {
+      let cleanPhone = (phone || '').replace(/\s+/g, '').replace(/-/g, '');
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = '213' + cleanPhone.substring(1);
+      }
+      const salonName = (salonData && salonData.salon && salonData.salon.name) ? salonData.salon.name : 'صالون الحلاقة';
+      
+      let text = '';
+      if (pos === 1) {
+        text = `السلام عليكم يا ${name || 'خونا'} 💈 معك ${salonName}، راهو لحق دورك والكرسي راهو واجد ومستنيك! تفضل بالدخول الآن مرحباً بك.`;
+      } else {
+        text = `السلام عليكم يا ${name || 'خونا'} 💈 معك ${salonName}، دورك راه قريب إن شاء الله (راك رقم #${pos} في الطابور). تفضل باتجاه الصالون باه تحكم بلاصتك فالكرسي!`;
+      }
+      window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    // ==========================================
+    // ⏰ 3. Smart Happy Hours (عرض الساعات الهادئة)
+    // ==========================================
+    function openHappyHourModal() {
+      const modal = document.getElementById('happy-hour-modal');
+      if (!modal) return;
+      const activeToggle = document.getElementById('hh-active-toggle');
+      const discountInput = document.getElementById('hh-discount-input');
+      const noteInput = document.getElementById('hh-note-input');
+      
+      if (salonData && salonData.salon) {
+        if (activeToggle) activeToggle.checked = !!salonData.salon.happy_hour_active;
+        if (discountInput) discountInput.value = salonData.salon.happy_hour_discount || 100;
+        if (noteInput) noteInput.value = salonData.salon.happy_hour_note || 'تخفيض الساعات الهادئة الصباحية';
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeHappyHourModal() {
+      const modal = document.getElementById('happy-hour-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function saveHappyHour() {
+      const active = document.getElementById('hh-active-toggle').checked;
+      const discount = parseFloat(document.getElementById('hh-discount-input').value) || 0;
+      const note = document.getElementById('hh-note-input').value.trim();
+      
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/happy-hour', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            is_active: active,
+            discount: discount,
+            note: note
+          })
+        });
+        const data = await res.json();
+        alert(data.message || 'تم تحديث إعدادات الساعات الهادئة!');
+        closeHappyHourModal();
+        loadBarberData();
+      } catch (e) {
+        alert('حدث خطأ أثناء حفظ الساعات الهادئة');
+      }
+    }
+
+    // ==========================================
+    // 🏦 4. BaridiMob RIP Setup
+    // ==========================================
+    function openBaridiMobModal() {
+      const modal = document.getElementById('baridimob-modal');
+      if (!modal) return;
+      const ripInput = document.getElementById('salon-rip-input');
+      if (ripInput && salonData && salonData.salon) {
+        ripInput.value = salonData.salon.baridimob_rip || '';
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeBaridiMobModal() {
+      const modal = document.getElementById('baridimob-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function saveBaridiMobRip() {
+      const rip = document.getElementById('salon-rip-input').value.trim();
+      if (!rip) {
+        alert('يرجى إدخال رقم RIP الخاص ببريدي موب');
+        return;
+      }
+      playDingDong();
+      try {
+        const res = await fetch('/api/salon/baridimob', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            baridimob_rip: rip
+          })
+        });
+        const data = await res.json();
+        alert(data.message || 'تم حفظ رقم BaridiMob RIP بنجاح!');
+        closeBaridiMobModal();
+        loadBarberData();
+      } catch (e) {
+        alert('حدث خطأ أثناء حفظ رقم BaridiMob');
+      }
+    }
+
+    // ==========================================
+    // 🧾 5. Salon Expenses (مصاريف الصندوق)
+    // ==========================================
+    let expensesList = [];
+
+    async function openExpensesModal() {
+      const modal = document.getElementById('expenses-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      await loadExpensesData();
+    }
+
+    function closeExpensesModal() {
+      const modal = document.getElementById('expenses-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function loadExpensesData() {
+      try {
+        const res = await fetch(`/api/barber/expenses/${SALON_ID}`);
+        const data = await res.json();
+        expensesList = data.expenses || [];
+        const totalEl = document.getElementById('expenses-total-today');
+        if (totalEl) totalEl.textContent = `${(data.total_expenses || 0).toLocaleString()} د.ج`;
+        
+        const listEl = document.getElementById('expenses-items-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        
+        if (expensesList.length === 0) {
+          listEl.innerHTML = '<div class="text-center py-4 text-xs text-slate-500">لا توجد مصاريف مسجلة لليوم حتى الآن ☕</div>';
+          return;
+        }
+        
+        expensesList.forEach(exp => {
+          const row = document.createElement('div');
+          row.className = 'p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs';
+          row.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="text-base">${exp.category === 'coffee' ? '☕' : exp.category === 'blades' ? '✂️' : exp.category === 'cleaning' ? '🧹' : '🧾'}</span>
+              <div>
+                <strong class="text-white block">${exp.description}</strong>
+                <span class="text-[10px] text-slate-400 font-mono">${exp.created_at ? exp.created_at.substring(11, 16) : ''}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="font-black text-rose-400">-${exp.amount.toLocaleString()} د.ج</span>
+              <button onclick="deleteExpense(${exp.id})" class="p-1 text-slate-500 hover:text-rose-400 transition" title="حذف">✕</button>
+            </div>
+          `;
+          listEl.appendChild(row);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function submitAddExpense() {
+      const amount = parseFloat(document.getElementById('exp-amount-input').value);
+      const category = document.getElementById('exp-category-select').value;
+      const desc = document.getElementById('exp-desc-input').value.trim();
+      
+      if (isNaN(amount) || amount <= 0 || !desc) {
+        alert('يرجى إدخال المبلغ وتفاصيل المصروف');
+        return;
+      }
+      
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/expenses/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            amount: amount,
+            category: category,
+            description: desc
+          })
+        });
+        const data = await res.json();
+        document.getElementById('exp-amount-input').value = '';
+        document.getElementById('exp-desc-input').value = '';
+        await loadExpensesData();
+        loadBarberData();
+      } catch (e) {
+        alert('حدث خطأ أثناء إضافة المصروف');
+      }
+    }
+
+    async function deleteExpense(expenseId) {
+      if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
+      try {
+        await fetch('/api/barber/expenses/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            expense_id: expenseId
+          })
+        });
+        await loadExpensesData();
+        loadBarberData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // ==========================================
+    // 🗣️ Voice Caller Logic (المنادي الصوتي بالدارجة)
+    // ==========================================
+    let isVoiceCallerEnabled = true;
+
+    function toggleVoiceCaller() {
+      isVoiceCallerEnabled = !isVoiceCallerEnabled;
+      const label = document.getElementById('voice-caller-label');
+      if (label) {
+        label.textContent = isVoiceCallerEnabled ? 'نشط' : 'صامت';
+        label.className = isVoiceCallerEnabled ? 'text-emerald-400 font-bold' : 'text-slate-400 font-bold';
+      }
+      playDingDong();
+    }
+
+    function speakClientTurn(name, chairNum) {
+      if (!isVoiceCallerEnabled) return;
+      playDingDong();
+      if ('speechSynthesis' in window) {
+        setTimeout(() => {
+          try {
+            const msg = `تفضل يا ${name || 'خونا'}، الكرسي رقم ${chairNum || 1} راه واجد ليك!`;
+            const utterance = new SpeechSynthesisUtterance(msg);
+            utterance.lang = 'ar-SA';
+            utterance.rate = 0.95;
+            window.speechSynthesis.speak(utterance);
+          } catch (e) {}
+        }, 400);
+      }
+    }
+
+    // ==========================================
+    // 🖨️ Thermal Receipt Printing (طباعة التذكرة الحرارية)
+    // ==========================================
+    function printThermalReceipt(chairId) {
+      if (!chairsData || !chairsData.chairs) return;
+      const chair = chairsData.chairs.find(c => c.id === chairId);
+      if (!chair || !chair.current_client) {
+        alert('لا يوجد زبون حالياً على هذا الكرسي للطباعة');
+        return;
+      }
+      const client = chair.current_client;
+      const salonName = (salonData && salonData.salon && salonData.salon.name) ? salonData.salon.name : 'صالون الحلاقة';
+      const salonPhone = (salonData && salonData.salon && salonData.salon.phone) ? salonData.salon.phone : '';
+
+      document.getElementById('rcpt-salon-name').textContent = salonName;
+      document.getElementById('rcpt-salon-phone').textContent = 'هاتف: ' + salonPhone;
+      document.getElementById('rcpt-client-name').textContent = client.customer_name;
+      document.getElementById('rcpt-ticket-num').textContent = client.id ? client.id.substring(client.id.length - 4) : '#1';
+      document.getElementById('rcpt-barber-name').textContent = chair.barber_name;
+      document.getElementById('rcpt-date-time').textContent = new Date().toLocaleString('fr-FR');
+      document.getElementById('rcpt-total-price').textContent = `${(client.total_service_price || 0).toLocaleString()} د.ج`;
+
+      const rowsContainer = document.getElementById('rcpt-services-rows');
+      rowsContainer.innerHTML = '';
+      if (client.services) {
+        client.services.forEach(s => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.justifyContent = 'space-between';
+          row.innerHTML = `<span>• ${s.name}</span><span>${s.price} د.ج</span>`;
+          rowsContainer.appendChild(row);
+        });
+      }
+      if (client.ordered_products && client.ordered_products.length > 0) {
+        client.ordered_products.forEach(p => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.justifyContent = 'space-between';
+          row.innerHTML = `<span>• ${p.name} (منتج)</span><span>${p.price} د.ج</span>`;
+          rowsContainer.appendChild(row);
+        });
+      }
+
+      window.print();
+    }
+
+    // ==========================================
+    // ⭐ Customer Reviews & Secret Box (تقييمات الزبائن)
+    // ==========================================
+    function openReviewsModal() {
+      document.getElementById('reviews-modal').classList.remove('hidden');
+      loadReviewsData();
+    }
+
+    function closeReviewsModal() {
+      document.getElementById('reviews-modal').classList.add('hidden');
+    }
+
+    async function loadReviewsData() {
+      try {
+        const res = await fetch(`/api/barber/reviews/${SALON_ID}`);
+        const data = await res.json();
+        const avgEl = document.getElementById('modal-reviews-avg');
+        const badgeEl = document.getElementById('reviews-avg-badge');
+        const cntEl = document.getElementById('modal-reviews-count');
+        const listEl = document.getElementById('reviews-items-list');
+
+        if (avgEl) avgEl.textContent = data.rating || 4.9;
+        if (badgeEl) badgeEl.textContent = data.rating || 4.9;
+        if (cntEl) cntEl.textContent = `بناءً على ${data.reviews_count || 0} تقييم حقيقي`;
+
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (!data.reviews || data.reviews.length === 0) {
+          listEl.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">لا توجد تقييمات مسجلة بعد. تظهر هنا فور انتهاء الزبائن من الحلاقة.</div>';
+          return;
+        }
+
+        data.reviews.forEach(r => {
+          const isComplaint = (r.rating <= 2);
+          const item = document.createElement('div');
+          item.className = `p-3 rounded-2xl border text-xs space-y-1.5 ${
+            isComplaint ? 'bg-rose-950/40 border-rose-500/50' : 'bg-slate-950 border-slate-800'
+          }`;
+
+          const stars = '⭐'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+
+          item.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <strong class="text-white">${r.customer_name || 'زبون الصالون'}</strong>
+                <span class="text-amber-400 text-xs">${stars}</span>
+                ${isComplaint ? '<span class="text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded">⚠️ شكوى تحتاج متابعة المعلم</span>' : ''}
+              </div>
+              <span class="text-[10px] text-slate-500 font-mono">${r.created_at ? r.created_at.substring(0, 16) : ''}</span>
+            </div>
+            ${r.comment ? `<p class="text-slate-300 text-[11px] bg-slate-900 p-2 rounded-xl border border-slate-800">"${r.comment}"</p>` : '<span class="text-[10px] text-slate-500 italic">تقييم بدون تعليق مكتوب</span>'}
+          `;
+          listEl.appendChild(item);
+        });
+      } catch (e) {
+        console.error('Error loading reviews:', e);
+      }
+    }
+
+    // ==========================================
+    // 📊 Monthly Analytics & Excel Export (الأرشيف والتقارير)
+    // ==========================================
+    function openMonthlyModal() {
+      document.getElementById('monthly-modal').classList.remove('hidden');
+      loadMonthlyAnalytics();
+    }
+
+    function closeMonthlyModal() {
+      document.getElementById('monthly-modal').classList.add('hidden');
+    }
+
+    async function loadMonthlyAnalytics() {
+      try {
+        const res = await fetch(`/api/barber/analytics/monthly/${SALON_ID}?days=30`);
+        const data = await res.json();
+
+        document.getElementById('monthly-rev-label').textContent = `${(data.total_revenue || 0).toLocaleString()} د.ج`;
+        document.getElementById('monthly-clients-label').textContent = `${data.total_clients || 0} حلاقة مكتملة`;
+        document.getElementById('monthly-exp-label').textContent = `-${(data.total_expenses || 0).toLocaleString()} د.ج`;
+        document.getElementById('monthly-net-label').textContent = `${(data.net_profit || 0).toLocaleString()} د.ج`;
+
+        const listEl = document.getElementById('monthly-daily-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (!data.daily_breakdown || data.daily_breakdown.length === 0) {
+          listEl.innerHTML = '<div class="text-center py-4 text-xs text-slate-500">لا توجد بيانات سابقة خلال هذا الشهر بعد.</div>';
+          return;
+        }
+
+        data.daily_breakdown.forEach(day => {
+          const row = document.createElement('div');
+          row.className = 'p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs';
+          row.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 font-mono">${day.date}</span>
+              <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-bold">${day.clients} زبون</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-amber-400 font-bold">${day.revenue.toLocaleString()} د.ج</span>
+              <span class="text-rose-400 font-bold text-[10px]">-${day.expenses.toLocaleString()}</span>
+              <strong class="text-emerald-400 font-black">${day.net.toLocaleString()} د.ج</strong>
+            </div>
+          `;
+          listEl.appendChild(row);
+        });
+      } catch (e) {
+        console.error('Error loading monthly analytics:', e);
+      }
+    }
+
+    // ==========================================
+    // 👑 Pack 3arous & VIP Events (باقات العرسان)
+    // ==========================================
+    function openGroomModal() {
+      document.getElementById('groom-modal').classList.remove('hidden');
+      loadGroomAppointments();
+    }
+
+    function closeGroomModal() {
+      document.getElementById('groom-modal').classList.add('hidden');
+    }
+
+    async function loadGroomAppointments() {
+      try {
+        const res = await fetch(`/api/groom/appointments/${SALON_ID}`);
+        const data = await res.json();
+        const listEl = document.getElementById('groom-appointments-list');
+        const badgeEl = document.getElementById('groom-count-badge');
+        if (badgeEl) badgeEl.textContent = (data.appointments || []).length;
+
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (!data.appointments || data.appointments.length === 0) {
+          listEl.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">لا توجد حجوزات عرسان حالياً. تظهر هنا فور حجز العرسان عبر صفحة الزبون 👑</div>';
+          return;
+        }
+
+        data.appointments.forEach(a => {
+          const card = document.createElement('div');
+          card.className = 'p-3.5 rounded-2xl bg-slate-950 border border-amber-500/40 space-y-2 text-xs';
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🤵</span>
+                <div>
+                  <strong class="text-white text-sm block">${a.customer_name}</strong>
+                  <span class="text-slate-400 font-mono text-[11px]">${a.customer_phone}</span>
+                </div>
+              </div>
+              <span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full font-black text-xs">
+                ${a.pack_name}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 p-2 bg-slate-900 rounded-xl border border-slate-800 text-[11px]">
+              <div>
+                <span class="text-slate-400 block">📅 الموعد:</span>
+                <strong class="text-white">${a.event_date} • ${a.event_time}</strong>
+              </div>
+              <div class="text-left">
+                <span class="text-slate-400 block">المبلغ & العربون:</span>
+                <strong class="text-amber-400">${a.price.toLocaleString()} د.ج</strong>
+                <span class="text-[10px] text-emerald-400 block">عربون: ${a.acompte_paid.toLocaleString()} د.ج</span>
+              </div>
+            </div>
+
+            ${a.notes ? `<p class="text-[11px] text-slate-300 italic bg-slate-900/50 p-2 rounded-lg">ملاحظات: "${a.notes}"</p>` : ''}
+
+            <div class="flex justify-end gap-2 pt-1">
+              <button onclick="sendWhatsAppAlert('${a.customer_phone}', '${a.customer_name}', 1)" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[10px] transition flex items-center gap-1 shadow">
+                <span>📲</span> مراسلة واتساب
+              </button>
+            </div>
+          `;
+          listEl.appendChild(card);
+        });
+      } catch (e) {
+        console.error('Error loading groom appointments:', e);
+      }
+    }
+
+    // SSE Real-time Listener (Safe Connection Lifecycle)
+    let evtSource = null;
+
+    function initSSE() {
+      if (evtSource) return;
+      try {
+        evtSource = new EventSource('/api/stream');
+        evtSource.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'queue_updated') {
+              if (payload.data && payload.data.action === 'join') {
+                const isCurrentSalon = (payload.data.salon_id === SALON_ID);
+                const srvText = payload.data.services 
+                  ? payload.data.services.map(s => s.name).join(' + ') 
+                  : 'خدمة حلاقة';
+                
+                if (isCurrentSalon) {
+                  showNewBookingToast(payload.data.customer_name, `${srvText} • ${payload.data.total_service_price || 0} د.ج`, SALON_ID);
+                } else {
+                  showNewBookingToast(payload.data.customer_name, `⚠️ وصل حجز جديد في صالون آخر (${payload.data.salon_id})! انقر للانتقال إليه فوراً`, payload.data.salon_id);
+                }
+              }
+              loadBarberData();
+            } else if (payload.event === 'turn_alert' || payload.event === 'salon_status_changed' || payload.event === 'salon_opened' || payload.event === 'salon_closed' || payload.event === 'crowd_updated' || payload.event === 'chairs_updated' || payload.event === 'happy_hour_updated' || payload.event === 'baridimob_updated' || payload.event === 'expense_updated' || payload.event === 'review_received' || payload.event === 'groom_booked' || payload.event === 'salon_modules_updated') {
+              loadBarberData();
+              loadReviewsData();
+              loadGroomAppointments();
+            }
+          } catch (e) {}
+        };
+        evtSource.onerror = () => {
+          disconnectSSE();
+        };
+      } catch (e) {}
+    }
+
+    function disconnectSSE() {
+      if (evtSource) {
+        try {
+          evtSource.close();
+        } catch (e) {}
+        evtSource = null;
+      }
+    }
+
+    // ==========================================
+    // ⚡ QUICK WALK-IN MODAL (تسجيل زبون حضوري سريع)
+    // ==========================================
+    function openWalkInModal() {
+      const modal = document.getElementById('walkin-modal');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeWalkInModal() {
+      const modal = document.getElementById('walkin-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function submitWalkIn(serviceName, duration, price) {
+      closeWalkInModal();
+      playDingDong();
+      try {
+        const res = await fetch('/api/queue/walkin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salon_id: SALON_ID,
+            service_name: serviceName,
+            duration: duration,
+            price: price
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          playAudioTone(520, 'sine', 0.2);
+          showNewBookingToast('زبون حضوري سريع', `${serviceName} • ${price} د.ج`, SALON_ID);
+          loadBarberData();
+        } else {
+          alert(data.error || 'حدث خطأ أثناء تسجيل الزبون الحضوري');
+        }
+      } catch (err) {
+        console.error('Walk-in error:', err);
+        alert('تعذر الاتصال بالسيرفر لتسجيل الزبون الحضوري');
+      }
+    }
+
+    // ==========================================
+    // 🚀 EID RUSH MODE (وضع ضغط الأعياد والمناسبات)
+    // ==========================================
+    let isEidActive = {{ 1 if salon and salon.is_eid_mode else 0 }};
+
+    function updateEidUI(active) {
+      isEidActive = !!active;
+      const btn = document.getElementById('eid-btn');
+      const label = document.getElementById('eid-label');
+      if (label) label.textContent = isEidActive ? 'مفعل 🚀' : 'معطل';
+      if (btn) {
+        if (isEidActive) {
+          btn.className = 'px-2.5 py-1 rounded-xl bg-amber-500 text-slate-950 font-black text-[11px] shadow-lg shadow-amber-500/20 transition';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 font-bold text-[11px] transition';
+        }
+      }
+    }
+
+    async function toggleEidMode() {
+      playDingDong();
+      try {
+        const res = await fetch('/api/barber/eid-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: SALON_ID })
+        });
+        const data = await res.json();
+        if (data.success) {
+          updateEidUI(data.is_eid_mode);
+          alert(data.message);
+        }
+      } catch (e) {
+        console.error('Eid mode error:', e);
+      }
+    }
+
+    // ==========================================
+    // 📱 MEGA TOUCH BUTTONS MODE (وضع الأزرار العملاقة للمس السهل)
+    // ==========================================
+    
+
+    // Restore modes on load
+    window.addEventListener('DOMContentLoaded', () => {
+      updateEidUI(isEidActive);
+      
+      
+    });
+
+    // Universal error suppressor for smooth UX
+    window.addEventListener('error', (e) => {
+      console.warn('Recovered from error gracefully:', e.message);
+    });
+
+    let barberPollTimer = null;
+    function startBarberPolling() {
+      if (barberPollTimer) clearInterval(barberPollTimer);
+      barberPollTimer = setInterval(loadBarberData, 3000);
+    }
+    function stopBarberPolling() {
+      if (barberPollTimer) {
+        clearInterval(barberPollTimer);
+        barberPollTimer = null;
+      }
+    }
+
+    // Immediate initial render from server-side chairs
+    if (chairsData && chairsData.chairs && chairsData.chairs.length > 0) {
+      try {
+        renderChairsBay();
+        renderChairsLeaderboard();
+      } catch (e) {}
+    }
+
+    loadBarberData();
+    initSSE();
+    startBarberPolling();
+  </script>
+      <!-- NATIVE BARBER BOTTOM NAVIGATION BAR (SAFE & PRODUCTIVE - 4 TABS) -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/90 px-4 py-2 flex items-center justify-around max-w-lg mx-auto sm:rounded-t-3xl shadow-2xl">
+    <a href="/barber" class="flex flex-col items-center gap-0.5 text-amber-400 font-black scale-105 transition text-[11px]">
+      <span class="text-lg">✂️</span>
+      <span>الكرسي والطابور</span>
+    </a>
+    <a href="/caisse" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-white font-bold transition text-[11px]">
+      <span class="text-lg">💰</span>
+      <span>إيرادات اليوم</span>
+    </a>
+    <button onclick="if(typeof openWalkInModal === 'function') openWalkInModal();" class="flex flex-col items-center gap-0.5 text-amber-400 hover:text-amber-300 font-bold transition text-[11px]">
+      <span class="text-lg">⚡</span>
+      <span>+ زبون حضوري</span>
+    </button>
+    <button onclick="if(typeof openSalonDrawer === 'function') openSalonDrawer(); else window.location.href='/barber';" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-amber-400 transition text-[11px] font-bold">
+      <span class="text-lg">⚙️</span>
+      <span>الإعدادات</span>
+    </button>
+  </nav>
+
+<script>
+  // Mobile Resilience Engine: Keyboard Auto-Hide & Sleep-Mode Auto-Sync
+  (function() {
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function() {
+        var nav = document.querySelector('nav.fixed.bottom-0');
+        if (nav) {
+          if (window.visualViewport.height < window.innerHeight * 0.78) {
+            nav.classList.add('hidden');
+          } else {
+            nav.classList.remove('hidden');
+          }
+        }
+      });
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        initSSE();
+        startBarberPolling();
+        if (typeof loadBarberData === 'function') loadBarberData();
+        if (typeof fetchQueueData === 'function') fetchQueueData();
+        if (typeof updateCrowdMetrics === 'function') updateCrowdMetrics();
+      } else {
+        disconnectSSE();
+        stopBarberPolling();
+      }
+    });
+
+    window.addEventListener('pagehide', function() {
+      disconnectSSE();
+      stopBarberPolling();
+    });
+    window.addEventListener('beforeunload', function() {
+      disconnectSSE();
+      stopBarberPolling();
+    });
+  })();
+</script>
+
+</body>
+</html>
