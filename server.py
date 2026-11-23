@@ -486,9 +486,7 @@ def call_next():
 # MULTI-CHAIR & PERFORMANCE ANALYTICS ENDPOINTS
 # -------------------------------------------------------------
 
-@app.route("/api/barber/chairs/<salon_id>", methods=["GET"])
-def get_salon_chairs(salon_id):
-    conn = get_db_connection()
+def fetch_salon_chairs_data(conn, salon_id):
     chairs_rows = conn.execute("""
         SELECT * FROM salon_chairs 
         WHERE salon_id = ? AND is_active = 1 
@@ -556,13 +554,19 @@ def get_salon_chairs(salon_id):
     for ch in chairs_data:
         ch["revenue_percentage"] = round((ch["today_revenue"] / total_revenue * 100), 1) if total_revenue > 0 else 0
 
-    conn.close()
-    return jsonify({
+    return {
         "chairs": chairs_data,
         "total_revenue": total_revenue,
         "total_haircuts": total_haircuts,
         "chairs_count": len(chairs_data)
-    })
+    }
+
+@app.route("/api/barber/chairs/<salon_id>", methods=["GET"])
+def get_salon_chairs(salon_id):
+    conn = get_db_connection()
+    data = fetch_salon_chairs_data(conn, salon_id)
+    conn.close()
+    return jsonify(data)
 
 
 @app.route("/api/barber/chairs/add", methods=["POST"])
@@ -2338,11 +2342,21 @@ def barber_dashboard(salon_id=None):
         conn.close()
         return render_template("salon_suspended.html", salon=dict(salon), admin_settings=settings_map)
 
+    chairs_result = fetch_salon_chairs_data(conn, salon_id)
     conn.close()
     if not salon:
         salon = all_salons_list[0] if all_salons_list else {"id": salon_id, "name": "صالون الأناقة الملكي", "barber_name": "المعلم رشيد", "wilaya": "الجزائر العاصمة (16)", "commune": "باب الزوار"}
 
-    resp = make_response(render_template("barber.html", salon_id=salon_id, salon=dict(salon), all_salons=all_salons_list, local_ip=get_local_ip()))
+    resp = make_response(render_template("barber.html", 
+        salon_id=salon_id, 
+        salon=dict(salon), 
+        all_salons=all_salons_list, 
+        local_ip=get_local_ip(),
+        chairs=chairs_result.get("chairs", []),
+        total_revenue=chairs_result.get("total_revenue", 0),
+        total_haircuts=chairs_result.get("total_haircuts", 0),
+        chairs_count=chairs_result.get("chairs_count", 0)
+    ))
     resp.set_cookie("barber_last_salon", salon_id, max_age=30*86400)
     return resp
 
@@ -2377,6 +2391,7 @@ def caisse_pos_dashboard(salon_id=None):
     products_rows = conn.execute("SELECT * FROM products WHERE type = 'b2c_hero'").fetchall()
     products_list = [dict(p) for p in products_rows]
 
+    chairs_result = fetch_salon_chairs_data(conn, salon_id)
     conn.close()
     if not salon:
         salon = all_salons_list[0] if all_salons_list else {"id": salon_id, "name": "صالون الأناقة الملكي", "barber_name": "المعلم رشيد", "wilaya": "الجزائر العاصمة (16)", "commune": "باب الزوار"}
