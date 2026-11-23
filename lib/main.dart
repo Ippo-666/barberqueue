@@ -11,8 +11,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 // 🌐 CONFIGURATION: رابط خادم المنصة الدائم بشهادة HTTPS
 // =========================================================================
 class AppConfig {
-  static const String serverUrl = "https://barberqueue-dz.onrender.com/portal";
   static const String baseUrl = "https://barberqueue-dz.onrender.com";
+  static const String serverUrl = "https://barberqueue-dz.onrender.com/portal";
 }
 
 void main() async {
@@ -187,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // =========================================================================
-// 2. MAIN WEBVIEW SCREEN WITH NATIVE BOTTOM NAVIGATION BAR
+// 2. MAIN WEBVIEW SCREEN (INDEXED STACK + 4 LAZY LOADED CONTROLLERS + PULL TO REFRESH)
 // =========================================================================
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -197,30 +197,40 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  double _progress = 0.0;
-  bool _hasError = false;
-  String _errorMessage = '';
-  String _currentUrl = AppConfig.serverUrl;
+  int _currentIndex = 0;
 
-  // 4 Native Navigation Tabs
+  // 4 Primary Platform Tab Endpoints
   static const List<String> _tabUrls = [
     '${AppConfig.baseUrl}/portal',
     '${AppConfig.baseUrl}/explore',
     '${AppConfig.baseUrl}/freelance/request',
     '${AppConfig.baseUrl}/login',
   ];
-  int _currentIndex = 0;
+
+  // Lazy Loaded Controllers & State per Tab
+  final List<WebViewController?> _controllers = [null, null, null, null];
+  final List<bool> _isTabLoaded = [false, false, false, false];
+  final List<bool> _isLoadingTab = [false, false, false, false];
+  final List<double> _progressTab = [0.0, 0.0, 0.0, 0.0];
+  final List<bool> _hasErrorTab = [false, false, false, false];
+  final List<String> _errorMsgTab = ['', '', '', ''];
 
   @override
   void initState() {
     super.initState();
-    _initWebViewController();
+    // Initialize primary tab (/portal) immediately on boot
+    _initTab(0);
     _checkConnectivity();
   }
 
-  void _initWebViewController() {
+  void _initTab(int index) {
+    if (_isTabLoaded[index]) return;
+
+    _isTabLoaded[index] = true;
+    _isLoadingTab[index] = true;
+    _progressTab[index] = 0.15;
+    _hasErrorTab[index] = false;
+
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0F19))
@@ -229,9 +239,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onProgress: (int progress) {
             if (mounted) {
               setState(() {
-                _progress = progress / 100.0;
+                _progressTab[index] = progress / 100.0;
                 if (progress >= 95) {
-                  _isLoading = false;
+                  _isLoadingTab[index] = false;
                 }
               });
             }
@@ -239,23 +249,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onPageStarted: (String url) {
             if (mounted) {
               setState(() {
-                _isLoading = true;
-                _hasError = false;
-                _currentUrl = url;
-                _updateCurrentTabFromUrl(url);
+                _isLoadingTab[index] = true;
+                _hasErrorTab[index] = false;
               });
             }
           },
           onPageFinished: (String url) {
             if (mounted) {
               setState(() {
-                _isLoading = false;
-                _progress = 0.0;
-                _updateCurrentTabFromUrl(url);
+                _isLoadingTab[index] = false;
+                _progressTab[index] = 0.0;
               });
             }
             // إخفاء الشريط السفلي للويب داخل التطبيق الأصلي لتفادي التكرار
-            _controller.runJavaScript("""
+            _controllers[index]?.runJavaScript("""
               (function() {
                 var webNav = document.querySelector('nav.fixed.bottom-0');
                 if (webNav) webNav.style.display = 'none';
@@ -267,13 +274,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (error.isForMainFrame ?? true) {
               if (mounted) {
                 setState(() {
-                  _hasError = true;
-                  _isLoading = false;
-                  _errorMessage = error.description;
+                  _hasErrorTab[index] = true;
+                  _isLoadingTab[index] = false;
+                  _errorMsgTab[index] = error.description;
                 });
               }
             }
-            // تنبيه مرئي عند فشل أي مورد رئيسي
             if (mounted && error.errorCode != -1) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -305,7 +311,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               return NavigationDecision.prevent;
             }
 
-            // 3. فتح روابط خرائط Google Maps في تطبيق الخرائط
+            // 3. فتح روابط خرائط Google Maps في تطبيق الخرائط الأصلي
             if (uri.host.contains('maps.google.com') ||
                 uri.host.contains('goo.gl') ||
                 uri.host.contains('maps.app.goo.gl')) {
@@ -313,15 +319,38 @@ class _WebViewScreenState extends State<WebViewScreen> {
               return NavigationDecision.prevent;
             }
 
-            // استجابة بصرية فورية (0 مللي ثانية) عند النقر على أي رابط داخلي
+            // 4. التوجيه الذكي بين التبويبات بدون إعادة تحميل (0ms Switching)
+            final path = uri.path;
+            if (path == '/explore' || path == '/explore/') {
+              if (index != 1) {
+                _onTabTapped(1);
+                return NavigationDecision.prevent;
+              }
+            } else if (path == '/freelance/request' || path == '/freelance/request/') {
+              if (index != 2) {
+                _onTabTapped(2);
+                return NavigationDecision.prevent;
+              }
+            } else if (path == '/portal' || path == '/portal/' || path == '/') {
+              if (index != 0) {
+                _onTabTapped(0);
+                return NavigationDecision.prevent;
+              }
+            } else if (path == '/login' || path == '/login/') {
+              if (index != 3) {
+                _onTabTapped(3);
+                return NavigationDecision.prevent;
+              }
+            }
+
+            // تنقل داخلي داخل نفس التبويب
             if (mounted) {
               setState(() {
-                _isLoading = true;
-                _progress = 0.15;
+                _isLoadingTab[index] = true;
+                _progressTab[index] = 0.15;
               });
             }
 
-            // السماح الكامل بجميع روابط المنصة
             return NavigationDecision.navigate;
           },
         ),
@@ -345,33 +374,36 @@ class _WebViewScreenState extends State<WebViewScreen> {
       );
     }
 
-    _controller = controller;
-    _controller.loadRequest(Uri.parse(_currentUrl));
-  }
-
-  void _updateCurrentTabFromUrl(String url) {
-    if (url.contains('/explore')) {
-      _currentIndex = 1;
-    } else if (url.contains('/freelance/request') || url.contains('/freelance/req')) {
-      _currentIndex = 2;
-    } else if (url.contains('/login')) {
-      _currentIndex = 3;
-    } else if (url.contains('/portal') || url.endsWith('.com/') || url.endsWith('.com')) {
-      _currentIndex = 0;
-    }
+    _controllers[index] = controller;
+    controller.loadRequest(Uri.parse(_tabUrls[index]));
   }
 
   void _onTabTapped(int index) {
     if (_currentIndex == index) {
-      _reloadPage();
+      // إعادة الضغط على نفس التبويب يعيد التحديث يدوياً
+      _reloadTab(index);
       return;
     }
+
+    // تحميل كسول (Lazy Loading): لا يُحمّل التبويب إلا عند أول طلب
+    if (!_isTabLoaded[index]) {
+      _initTab(index);
+    }
+
     setState(() {
       _currentIndex = index;
-      _isLoading = true;
-      _progress = 0.2;
     });
-    _controller.loadRequest(Uri.parse(_tabUrls[index]));
+  }
+
+  void _reloadTab(int index) {
+    if (_controllers[index] != null) {
+      setState(() {
+        _isLoadingTab[index] = true;
+        _hasErrorTab[index] = false;
+        _progressTab[index] = 0.15;
+      });
+      _controllers[index]!.reload();
+    }
   }
 
   Future<void> _checkConnectivity() async {
@@ -379,19 +411,79 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (connectivityResult.contains(ConnectivityResult.none)) {
       if (mounted) {
         setState(() {
-          _hasError = true;
+          _hasErrorTab[_currentIndex] = true;
         });
       }
     }
   }
 
-  void _reloadPage() {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-      _progress = 0.15;
-    });
-    _controller.reload();
+  Widget _buildErrorView(int index) {
+    final errorMsg = _errorMsgTab[index];
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withOpacity(0.3),
+                ),
+              ),
+              child: const Center(
+                child: Text('📡', style: TextStyle(fontSize: 38)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'تعذر الاتصال بالخادم',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMsg.isNotEmpty
+                  ? 'السبب: $errorMsg\nيرجى التأكد من تشغيل بيانات 4G أو الواي فاي.'
+                  : 'يرجى التأكد من تشغيل بيانات الهاتف (4G) أو الاتصال بشبكة Wi-Fi، ثم أعد المحاولة.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF94A3B8),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              onPressed: () => _reloadTab(index),
+              icon: const Text('🔄'),
+              label: const Text(
+                'إعادة المحاولة الآن',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: const Color(0xFF0B0F19),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -400,8 +492,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        if (await _controller.canGoBack()) {
-          _controller.goBack();
+        final currentCtrl = _controllers[_currentIndex];
+        if (currentCtrl != null && await currentCtrl.canGoBack()) {
+          currentCtrl.goBack();
+        } else if (_currentIndex != 0) {
+          // العودة للتبويب الرئيسي (الرئيسية) قبل الخروج
+          _onTabTapped(0);
         } else {
           // تأكيد الخروج من التطبيق
           final shouldExit = await showDialog<bool>(
@@ -445,107 +541,51 @@ class _WebViewScreenState extends State<WebViewScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0F19),
         body: SafeArea(
-          child: Stack(
-            children: [
-              // 1. The WebView Core
-              if (!_hasError)
-                RefreshIndicator(
-                  color: const Color(0xFFF59E0B),
-                  backgroundColor: const Color(0xFF1E293B),
-                  onRefresh: () async {
-                    _controller.reload();
-                  },
-                  child: WebViewWidget(controller: _controller),
-                ),
-
-              // 2. Custom Native Offline / Error View
-              if (_hasError)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: const Color(0xFFF59E0B).withOpacity(0.3),
-                            ),
-                          ),
-                          child: const Center(
-                            child: Text('📡', style: TextStyle(fontSize: 38)),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'تعذر الاتصال بالخادم',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _errorMessage.isNotEmpty
-                              ? 'السبب: $_errorMessage\nيرجى التأكد من تشغيل بيانات 4G أو الواي فاي.'
-                              : 'يرجى التأكد من تشغيل بيانات الهاتف (4G) أو الاتصال بشبكة Wi-Fi، ثم أعد المحاولة.',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF94A3B8),
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 28),
-                        ElevatedButton.icon(
-                          onPressed: _reloadPage,
-                          icon: const Text('🔄'),
-                          label: const Text(
-                            'إعادة المحاولة الآن',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF59E0B),
-                            foregroundColor: const Color(0xFF0B0F19),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 28,
-                              vertical: 14,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                        ),
-                      ],
+          child: IndexedStack(
+            index: _currentIndex,
+            children: List.generate(4, (index) {
+              if (!_isTabLoaded[index] || _controllers[index] == null) {
+                return const SizedBox.shrink();
+              }
+              return Stack(
+                children: [
+                  // 1. The WebView Core with Native Pull-To-Refresh
+                  if (!_hasErrorTab[index])
+                    RefreshIndicator(
+                      color: const Color(0xFFF59E0B),
+                      backgroundColor: const Color(0xFF1E293B),
+                      onRefresh: () async {
+                        _reloadTab(index);
+                      },
+                      child: WebViewWidget(controller: _controllers[index]!),
                     ),
-                  ),
-                ),
 
-              // 3. Top Progress Loading Bar (Amber 500)
-              if (_isLoading && !_hasError)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: LinearProgressIndicator(
-                    value: _progress > 0 ? _progress : null,
-                    backgroundColor: Colors.transparent,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFFF59E0B),
+                  // 2. Custom Native Offline / Error View
+                  if (_hasErrorTab[index])
+                    _buildErrorView(index),
+
+                  // 3. Top Progress Loading Bar (Amber 500)
+                  if (_isLoadingTab[index] && !_hasErrorTab[index])
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: LinearProgressIndicator(
+                        value: _progressTab[index] > 0 ? _progressTab[index] : null,
+                        backgroundColor: Colors.transparent,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFFF59E0B),
+                        ),
+                        minHeight: 3.0,
+                      ),
                     ),
-                    minHeight: 3.0,
-                  ),
-                ),
-            ],
+                ],
+              );
+            }),
           ),
         ),
 
-        // 4. Native Bottom Navigation Bar (أصلي وسريع بدون لاق)
+        // 4. Native Bottom Navigation Bar (أصلي وسريع 0ms مع IndexedStack)
         bottomNavigationBar: Container(
           decoration: const BoxDecoration(
             color: Color(0xFF0F172A),
