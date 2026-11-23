@@ -63,8 +63,9 @@ jobs:
 
           echo "=== 4. Configuring Android Permissions & Intent Queries ==="
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.CAMERA"/>' "$MANIFEST"
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' "$MANIFEST"
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
+          sed -i 's/android:label="[^"]*"/android:label="دورك (Dorek)"/g' "$MANIFEST"
           
           # Add Package Visibility Queries for Android 11+ (WhatsApp, Maps, Tel)
           QUERIES='<queries>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="whatsapp" /></intent>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="tel" /></intent>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="geo" /></intent>\n    <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>\n</queries>'
@@ -94,6 +95,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v1.0.3-${{ github.run_number }}" BarberQueue.apk \
-            --title "BarberQueue Android App v1.0.3" \
-            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.3: إذن تحديد الموقع GPS التلقائي في WebView، شريط تحميل علوي تفاعلي LinearProgressIndicator، سرعة استجابة فائقة بفضل Connection Pooling لـ Neon PostgreSQL، خادم بـ 30 مسار معالجة (Threads)، التخزين المؤقت Cache-Control، وتحسينات الواجهة لشاشات الهاتف." || true
+          gh release create "v1.0.4-${{ github.run_number }}" BarberQueue.apk \
+            --title "BarberQueue Android App v1.0.4 (Dorek)" \
+            --notes "تطبيق دورك (BarberQueue DZ) الإصدار v1.0.4: شريط سفلي أصلي تفاعلي فائق السرعة (Native BottomNavigationBar)، استجابة فورية 0ms عند النقر، ضبط 16 مسار معالجة لخادم Gthread، اعتماد Neon Cloud Pooler بدون تجمد، إزالة إذن الكاميرا عند الإقلاع، وتغيير الاسم الرسمي إلى دورك (Dorek)." || true
