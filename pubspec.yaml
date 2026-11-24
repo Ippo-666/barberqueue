@@ -1,7 +1,7 @@
 name: barber_queue_app
 description: "تطبيق دورك - منصة حجز صالونات الحلاقة وطلب حلاق للمنزل في الجزائر"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.9+10
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
