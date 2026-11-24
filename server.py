@@ -3391,7 +3391,10 @@ if __name__ == "__main__":
     def auto_open_browser():
         time.sleep(1.2)
         try:
-            webbrowser.open("http://localhost:5000/")
+            is_admin = os.environ.get("ENABLE_ADMIN", "false").strip().lower() in ("true", "1", "yes")
+            admin_pin = os.environ.get("ADMIN_PIN", "1226").strip()
+            target_url = f"http://127.0.0.1:5000/admin/direct?key={admin_pin}" if is_admin else "http://localhost:5000/"
+            webbrowser.open(target_url)
         except Exception:
             pass
 
