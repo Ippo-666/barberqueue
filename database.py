@@ -16,16 +16,34 @@ import json
 import os
 import re
 import threading
-from datetime import datetime, date
+import decimal
+from datetime import datetime, date, time
 from typing import Dict, List, Optional, Any
+
+# Load local .env if present
+def _load_env_file():
+    env_file = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_file):
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+_load_env_file()
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "barber_queue.db")
 
 # =====================================================================
 # DUAL-ENGINE ADAPTER: PostgreSQL (Production / Cloud) + SQLite (Local)
 # =====================================================================
-
-import datetime
 
 class RowWrapper(dict):
     """
@@ -34,25 +52,34 @@ class RowWrapper(dict):
     1. By column name: row['id'], row['customer_name'] (via RealDictCursor dict keys)
     2. By integer index: row[0], row[1] (via tuple index)
     3. Dict methods: row.get('key'), row.keys(), row.items(), dict(row)
-    4. Automatically stringifies datetime/date to match SQLite behavior for Jinja2 templates & JSON.
+    4. Automatically stringifies datetime/date/time to match SQLite behavior for Jinja2 templates & JSON.
+    5. Automatically converts Decimal objects to float.
     """
     def __init__(self, data_dict, tuple_data):
         cleaned_dict = {}
         for k, v in data_dict.items():
-            if isinstance(v, datetime.datetime):
+            if isinstance(v, datetime):
                 cleaned_dict[k] = v.strftime("%Y-%m-%d %H:%M:%S")
-            elif isinstance(v, datetime.date):
+            elif isinstance(v, date):
                 cleaned_dict[k] = v.strftime("%Y-%m-%d")
+            elif isinstance(v, time):
+                cleaned_dict[k] = v.strftime("%H:%M:%S")
+            elif isinstance(v, decimal.Decimal):
+                cleaned_dict[k] = float(v)
             else:
                 cleaned_dict[k] = v
         super().__init__(cleaned_dict)
 
         cleaned_tuple = []
         for v in tuple_data:
-            if isinstance(v, datetime.datetime):
+            if isinstance(v, datetime):
                 cleaned_tuple.append(v.strftime("%Y-%m-%d %H:%M:%S"))
-            elif isinstance(v, datetime.date):
+            elif isinstance(v, date):
                 cleaned_tuple.append(v.strftime("%Y-%m-%d"))
+            elif isinstance(v, time):
+                cleaned_tuple.append(v.strftime("%H:%M:%S"))
+            elif isinstance(v, decimal.Decimal):
+                cleaned_tuple.append(float(v))
             else:
                 cleaned_tuple.append(v)
         self._tuple = tuple(cleaned_tuple)
@@ -396,6 +423,7 @@ def get_db_connection():
     conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
 
+
 def init_db():
     """Initializes all database tables and seeds default Algerian barbershop data."""
     conn = get_db_connection()
@@ -697,7 +725,7 @@ def init_db():
     )
     """)
 
-    # 16. Freelancer痕 Wallet Recharges Table (شحن رصيد الحلاق ببريدي موب)
+    # 16. Freelancer Wallet Recharges Table (شحن رصيد الحلاق ببريدي موب)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_wallet_recharges (
         id TEXT PRIMARY KEY,

@@ -16,16 +16,55 @@ try:
 except ImportError:
     pass
 
-from flask import Flask, request, jsonify, render_template, Response, send_from_directory, redirect, make_response
+from flask import Flask, request, jsonify, render_template, Response, send_from_directory, redirect, make_response, abort
 import sqlite3
 import json
 import os
 import sys
 import time
 import uuid
+import decimal
 from datetime import datetime, date, timedelta
 from queue import Queue
 from typing import Dict, List, Any
+
+# Load local .env if present
+def _load_env_file():
+    env_file = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_file):
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+_load_env_file()
+
+def clean_for_json(obj):
+    """Recursively converts datetimes, dates, times, Decimals, and nested collections into JSON-serializable types."""
+    if obj is None:
+        return None
+    if isinstance(obj, (datetime, date)):
+        return obj.strftime("%Y-%m-%d %H:%M:%S") if isinstance(obj, datetime) else obj.strftime("%Y-%m-%d")
+    if hasattr(obj, 'strftime') and callable(getattr(obj, 'strftime')):
+        try:
+            return obj.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return str(obj)
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {str(k): clean_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [clean_for_json(x) for x in obj]
+    return obj
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
@@ -49,6 +88,14 @@ def add_performance_headers(response):
     if request.path.startswith('/static/'):
         response.headers['Cache-Control'] = 'public, max-age=86400'
     return response
+
+@app.before_request
+def check_admin_gate():
+    path = request.path
+    if path == "/admin" or path.startswith("/admin/") or path.startswith("/api/admin"):
+        enable_admin = os.environ.get("ENABLE_ADMIN", "false").strip().lower()
+        if enable_admin not in ("true", "1", "yes"):
+            abort(404)
 
 # Auto-initialize database tables on boot (Gunicorn / Serverless / Local)
 try:
@@ -487,79 +534,113 @@ def call_next():
 # -------------------------------------------------------------
 
 def fetch_salon_chairs_data(conn, salon_id):
-    chairs_rows = conn.execute("""
-        SELECT * FROM salon_chairs 
-        WHERE salon_id = ? AND is_active = 1 
-        ORDER BY chair_number ASC
-    """, (salon_id,)).fetchall()
+    try:
+        chairs_rows = conn.execute("""
+            SELECT * FROM salon_chairs 
+            WHERE salon_id = ? AND is_active = 1 
+            ORDER BY chair_number ASC
+        """, (salon_id,)).fetchall()
+    except Exception as e:
+        print(f"[fetch_salon_chairs_data] Error querying salon_chairs: {e}")
+        chairs_rows = []
+
+    # Auto-provision default chair 1 if salon exists but has no active chairs
+    if not chairs_rows:
+        try:
+            s_row = conn.execute("SELECT id, barber_name FROM salons WHERE id = ?", (salon_id,)).fetchone()
+            if s_row:
+                b_name = s_row["barber_name"] or "الحلاق الرئيسي"
+                conn.execute("""
+                    INSERT INTO salon_chairs (id, salon_id, chair_number, barber_name, is_active, commission_rate)
+                    VALUES (?, ?, 1, ?, 1, 50.0)
+                """, (f"chair_{salon_id}_1", salon_id, b_name))
+                conn.commit()
+                chairs_rows = conn.execute("""
+                    SELECT * FROM salon_chairs 
+                    WHERE salon_id = ? AND is_active = 1 
+                    ORDER BY chair_number ASC
+                """, (salon_id,)).fetchall()
+        except Exception as e:
+            print(f"[fetch_salon_chairs_data] Auto-provision chair fallback error: {e}")
 
     today_start = datetime.now().strftime("%Y-%m-%d 00:00:00")
     chairs_data = []
 
     for c in chairs_rows:
         chair = dict(c)
-        chair_num = chair["chair_number"]
+        chair_num = chair.get("chair_number") or 1
         
         # Load current active client in this chair if any
         current_client = None
-        if chair["current_ticket_id"]:
-            t_row = conn.execute("SELECT * FROM queue_tickets WHERE id = ?", (chair["current_ticket_id"],)).fetchone()
-            if t_row and t_row["status"] == "in_chair":
-                current_client = dict(t_row)
-                current_client["services"] = json.loads(current_client["services_json"]) if current_client["services_json"] else []
-                current_client["ordered_products"] = json.loads(current_client["ordered_products_json"]) if current_client["ordered_products_json"] else []
-                l_row = conn.execute("SELECT visits_count FROM customer_loyalty WHERE phone = ?", (current_client["customer_phone"],)).fetchone()
-                current_client["loyalty_visits"] = l_row["visits_count"] if l_row else 1
-            else:
-                conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair["id"],))
-                conn.commit()
+        if chair.get("current_ticket_id"):
+            try:
+                t_row = conn.execute("SELECT * FROM queue_tickets WHERE id = ?", (chair["current_ticket_id"],)).fetchone()
+                if t_row and t_row["status"] == "in_chair":
+                    current_client = dict(t_row)
+                    current_client["services"] = json.loads(current_client["services_json"]) if current_client.get("services_json") else []
+                    current_client["ordered_products"] = json.loads(current_client["ordered_products_json"]) if current_client.get("ordered_products_json") else []
+                    l_row = conn.execute("SELECT visits_count FROM customer_loyalty WHERE phone = ?", (current_client.get("customer_phone"),)).fetchone()
+                    current_client["loyalty_visits"] = l_row["visits_count"] if l_row else 1
+                else:
+                    conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair["id"],))
+                    conn.commit()
+            except Exception as e:
+                print(f"[fetch_salon_chairs_data] Error loading current client: {e}")
 
-        chair["current_client"] = current_client
+        chair["current_client"] = clean_for_json(current_client)
 
         # Today's completed count for this chair
-        completed_today = conn.execute("""
-            SELECT COUNT(*), COALESCE(SUM(total_service_price), 0) 
-            FROM queue_tickets 
-            WHERE salon_id = ? AND chair_id = ? AND status = 'completed' AND completed_at >= ?
-        """, (salon_id, chair_num, today_start)).fetchone()
+        try:
+            completed_today = conn.execute("""
+                SELECT COUNT(*), COALESCE(SUM(total_service_price), 0) 
+                FROM queue_tickets 
+                WHERE salon_id = ? AND chair_id = ? AND status = 'completed' AND completed_at >= ?
+            """, (salon_id, chair_num, today_start)).fetchone()
 
-        haircuts_count = completed_today[0]
-        revenue = float(completed_today[1])
-        commission_rate = chair.get("commission_rate") or 50.0
-        barber_share = revenue * (commission_rate / 100.0)
-        salon_share = revenue - barber_share
+            haircuts_count = int(completed_today[0]) if completed_today else 0
+            revenue = float(completed_today[1]) if completed_today and completed_today[1] is not None else 0.0
+        except Exception as e:
+            print(f"[fetch_salon_chairs_data] Error querying completed haircuts: {e}")
+            haircuts_count = 0
+            revenue = 0.0
 
+        raw_comm = chair.get("commission_rate")
+        commission_rate = float(raw_comm) if raw_comm is not None else 50.0
+        barber_share = round(revenue * (commission_rate / 100.0), 2)
+        salon_share = round(revenue - barber_share, 2)
+
+        chair["commission_rate"] = commission_rate
         chair["today_haircuts"] = haircuts_count
         chair["today_revenue"] = revenue
         chair["barber_share"] = barber_share
         chair["salon_share"] = salon_share
-        chairs_data.append(chair)
+        chairs_data.append(clean_for_json(chair))
 
     # Compute rankings
-    sorted_by_haircuts = sorted(chairs_data, key=lambda x: x["today_haircuts"], reverse=True)
+    sorted_by_haircuts = sorted(chairs_data, key=lambda x: x.get("today_haircuts", 0), reverse=True)
     for rank, ch in enumerate(sorted_by_haircuts, 1):
         for orig in chairs_data:
             if orig["id"] == ch["id"]:
                 orig["rank_haircuts"] = rank
 
-    sorted_by_revenue = sorted(chairs_data, key=lambda x: x["today_revenue"], reverse=True)
+    sorted_by_revenue = sorted(chairs_data, key=lambda x: x.get("today_revenue", 0.0), reverse=True)
     for rank, ch in enumerate(sorted_by_revenue, 1):
         for orig in chairs_data:
             if orig["id"] == ch["id"]:
                 orig["rank_revenue"] = rank
 
-    total_revenue = sum(c["today_revenue"] for c in chairs_data)
-    total_haircuts = sum(c["today_haircuts"] for c in chairs_data)
+    total_revenue = round(sum(c.get("today_revenue", 0.0) for c in chairs_data), 2)
+    total_haircuts = sum(c.get("today_haircuts", 0) for c in chairs_data)
 
     for ch in chairs_data:
-        ch["revenue_percentage"] = round((ch["today_revenue"] / total_revenue * 100), 1) if total_revenue > 0 else 0
+        ch["revenue_percentage"] = round((ch.get("today_revenue", 0.0) / total_revenue * 100), 1) if total_revenue > 0 else 0
 
-    return {
+    return clean_for_json({
         "chairs": chairs_data,
         "total_revenue": total_revenue,
         "total_haircuts": total_haircuts,
         "chairs_count": len(chairs_data)
-    }
+    })
 
 
 @app.route("/api/barber/chairs/<salon_id>", methods=["GET"])
@@ -2322,43 +2403,52 @@ def customer_portal(salon_id=None):
 @app.route("/barber")
 @app.route("/barber/<salon_id>")
 def barber_dashboard(salon_id=None):
-    conn = get_db_connection()
-    all_salons = conn.execute("SELECT id, name, barber_name, wilaya, commune FROM salons").fetchall()
-    all_salons_list = [dict(s) for s in all_salons]
+    try:
+        conn = get_db_connection()
+        all_salons = conn.execute("SELECT id, name, barber_name, wilaya, commune FROM salons").fetchall()
+        all_salons_list = [clean_for_json(dict(s)) for s in all_salons]
 
-    if not salon_id:
-        cookie_salon = request.cookies.get("barber_last_salon")
-        if cookie_salon and any(s["id"] == cookie_salon for s in all_salons_list):
+        if not salon_id:
+            cookie_salon = request.cookies.get("barber_last_salon")
+            if cookie_salon and any(s["id"] == cookie_salon for s in all_salons_list):
+                conn.close()
+                return redirect(f"/barber/{cookie_salon}")
+            salon_id = all_salons_list[0]["id"] if all_salons_list else "salon_dz_1"
+
+        salon = conn.execute("SELECT * FROM salons WHERE id = ?", (salon_id,)).fetchone()
+        
+        # 🚫 Check if salon subscription is suspended by Admin
+        if salon and salon["subscription_status"] == "suspended":
+            admin_settings_rows = conn.execute("SELECT key, value FROM admin_settings").fetchall()
+            settings_map = {r["key"]: r["value"] for r in admin_settings_rows}
             conn.close()
-            return redirect(f"/barber/{cookie_salon}")
-        salon_id = all_salons_list[0]["id"] if all_salons_list else "salon_dz_1"
+            return render_template("salon_suspended.html", salon=clean_for_json(dict(salon)), admin_settings=settings_map)
 
-    salon = conn.execute("SELECT * FROM salons WHERE id = ?", (salon_id,)).fetchone()
-    
-    # 🚫 Check if salon subscription is suspended by Admin
-    if salon and salon["subscription_status"] == "suspended":
-        admin_settings_rows = conn.execute("SELECT key, value FROM admin_settings").fetchall()
-        settings_map = {r["key"]: r["value"] for r in admin_settings_rows}
+        chairs_result = fetch_salon_chairs_data(conn, salon_id)
         conn.close()
-        return render_template("salon_suspended.html", salon=dict(salon), admin_settings=settings_map)
+        if not salon:
+            salon = all_salons_list[0] if all_salons_list else {"id": salon_id, "name": "صالون الأناقة الملكي", "barber_name": "المعلم رشيد", "wilaya": "الجزائر العاصمة (16)", "commune": "باب الزوار"}
 
-    chairs_result = fetch_salon_chairs_data(conn, salon_id)
-    conn.close()
-    if not salon:
-        salon = all_salons_list[0] if all_salons_list else {"id": salon_id, "name": "صالون الأناقة الملكي", "barber_name": "المعلم رشيد", "wilaya": "الجزائر العاصمة (16)", "commune": "باب الزوار"}
+        salon_dict = clean_for_json(dict(salon))
+        chairs_list = chairs_result.get("chairs", [])
 
-    resp = make_response(render_template("barber.html", 
-        salon_id=salon_id, 
-        salon=dict(salon), 
-        all_salons=all_salons_list, 
-        local_ip=get_local_ip(),
-        chairs=chairs_result.get("chairs", []),
-        total_revenue=chairs_result.get("total_revenue", 0),
-        total_haircuts=chairs_result.get("total_haircuts", 0),
-        chairs_count=chairs_result.get("chairs_count", 0)
-    ))
-    resp.set_cookie("barber_last_salon", salon_id, max_age=30*86400)
-    return resp
+        resp = make_response(render_template("barber.html", 
+            salon_id=salon_id, 
+            salon=salon_dict, 
+            all_salons=all_salons_list, 
+            local_ip=get_local_ip(),
+            chairs=chairs_list,
+            total_revenue=chairs_result.get("total_revenue", 0),
+            total_haircuts=chairs_result.get("total_haircuts", 0),
+            chairs_count=chairs_result.get("chairs_count", 0)
+        ))
+        resp.set_cookie("barber_last_salon", salon_id, max_age=30*86400)
+        return resp
+    except Exception as e:
+        print(f"[barber_dashboard] Error loading dashboard for salon {salon_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "فشل تحميل لوحة الحلاق", "details": str(e)}), 500
 
 
 # -------------------------------------------------------------
