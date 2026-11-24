@@ -16,21 +16,18 @@ try:
 except ImportError:
     pass
 
-from flask import Flask, request, jsonify, render_template, Response, send_from_directory, redirect, make_response, abort
-import sqlite3
-import json
 import os
 import sys
-import time
-import uuid
-import decimal
-from datetime import datetime, date, timedelta
-from queue import Queue
-from typing import Dict, List, Any
 
-# Load local .env if present
+# Priority 1: Load environment variables via load_dotenv() before any database import
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 def _load_env_file():
-    env_file = os.path.join(os.path.dirname(__file__), ".env")
+    env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if os.path.exists(env_file):
         try:
             with open(env_file, "r", encoding="utf-8") as f:
@@ -46,6 +43,16 @@ def _load_env_file():
             pass
 
 _load_env_file()
+
+from flask import Flask, request, jsonify, render_template, Response, send_from_directory, redirect, make_response, abort
+import sqlite3
+import json
+import time
+import uuid
+import decimal
+from datetime import datetime, date, timedelta
+from queue import Queue
+from typing import Dict, List, Any
 
 def clean_for_json(obj):
     """Recursively converts datetimes, dates, times, Decimals, and nested collections into JSON-serializable types."""
@@ -2919,6 +2926,29 @@ def get_salon_reviews(salon_id):
 # -------------------------------------------------------------
 # 15. SUPER ADMIN MASTER AUTHENTICATION & SUBSCRIPTIONS
 # -------------------------------------------------------------
+@app.route("/admin/direct", methods=["GET"])
+def admin_direct_login():
+    # 1. Must be enabled by ENABLE_ADMIN
+    if os.environ.get("ENABLE_ADMIN", "false").strip().lower() not in ("true", "1", "yes"):
+        abort(404)
+
+    # 2. Must be strictly from local machine (127.0.0.1 or ::1)
+    remote_ip = request.remote_addr or ""
+    if remote_ip not in ("127.0.0.1", "::1", "localhost") or request.headers.get("X-Forwarded-For"):
+        abort(404)
+
+    # 3. Match secret key with ADMIN_PIN (1226)
+    expected_pin = os.environ.get("ADMIN_PIN", "1226").strip()
+    key = str(request.args.get("key") or "").strip()
+    if not key or key != expected_pin:
+        abort(404)
+
+    # 4. Direct login: set cookie and redirect straight to /admin
+    resp = redirect("/admin")
+    resp.set_cookie("admin_auth_token", "master_admin_session_valid", max_age=30*86400, httponly=True)
+    return resp
+
+
 @app.route("/admin/login", methods=["GET"])
 def admin_login_page():
     # If already logged in, redirect to /admin
@@ -2936,7 +2966,8 @@ def admin_login_api():
     pin_row = conn.execute("SELECT value FROM admin_settings WHERE key = 'master_pin'").fetchone()
     conn.close()
 
-    master_pin = os.environ.get('ADMIN_PIN') or (pin_row["value"] if pin_row else "2026")
+    master_pin = pin_row["value"] if pin_row and pin_row["value"] else os.environ.get('ADMIN_PIN', '1226')
+
     if pin == master_pin:
         resp = jsonify({"success": True, "message": "تم تسجيل الدخول بنجاح!"})
         resp.set_cookie("admin_auth_token", "master_admin_session_valid", max_age=30*86400, httponly=True)

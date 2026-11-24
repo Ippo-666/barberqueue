@@ -348,7 +348,11 @@ def get_pg_pool(db_url, conn_args):
 
 
 def get_db_connection():
-    db_url = os.environ.get("DATABASE_URL")
+    # Enforce SQLite in test mode to guarantee Neon production database is NEVER touched
+    if os.environ.get("IS_TESTING") == "1" or os.environ.get("USE_SQLITE_TESTING") == "1":
+        db_url = None
+    else:
+        db_url = os.environ.get("DATABASE_URL")
     if db_url:
         try:
             import psycopg2
@@ -663,7 +667,8 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
-    cursor.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('master_pin', '2026')")
+    cursor.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('master_pin', '1226')")
+    cursor.execute("UPDATE admin_settings SET value = '1226' WHERE key = 'master_pin' AND value = '2026'")
     cursor.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('admin_phone', '0555 12 34 56')")
     cursor.execute("INSERT OR IGNORE INTO admin_settings (key, value) VALUES ('admin_rip', '00799999000123456789')")
 

@@ -1,12 +1,21 @@
-# Python
+# Python & Databases
 __pycache__/
 *.py[cod]
 *$py.class
 *.sqlite
+*.db
+*.db-wal
+*.db-shm
 barber_queue.db
 barber_queue.db-wal
 barber_queue.db-shm
 .env
+.env*
+
+# Sensitive Admin & Launch Scripts
+*.bat
+*.lnk
+*_admin*
 
 # Flutter & Android
 .dart_tool/
