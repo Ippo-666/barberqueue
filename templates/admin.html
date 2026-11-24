@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة الإدارة المركزية - دورك</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- QRCode.js for generating live scannable QR on Admin Screen -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'IBM Plex Sans Arabic', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .modal-backdrop { background-color: rgba(9, 9, 11, 0.4); backdrop-filter: blur(4px); }
+  </style>
+</head>
+<body class="bg-[#FAFAFA] text-zinc-950 min-h-screen p-4 sm:p-6 antialiased flex flex-col items-center">
+
+  <div class="w-full max-w-5xl space-y-6">
+
+    <!-- Header -->
+    <header class="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 pb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-zinc-900 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          دورك
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-zinc-950">لوحة الإدارة المركزية (Admin Hub)</h1>
+            <span class="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-medium">● متصل ومباشر</span>
+          </div>
+          <p class="text-xs text-zinc-500">إدارة شبكة الصالونات، الحلاقين المتنقلين، الاشتراكات والطلبيات</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2 flex-wrap">
+        <a href="#store-hub-section" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold transition">
+          متجر الجملة
+        </a>
+        <button onclick="openAdminSettingsModal()" class="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-semibold transition">
+          الإعدادات & بريدي موب
+        </button>
+        <button onclick="openAddSalonModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs transition">
+          إضافة صالون جديد
+        </button>
+        <button onclick="logoutAdmin()" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-semibold transition">
+          خروج
+        </button>
+        <a href="/poster" target="_blank" class="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-lg transition font-medium">
+          ملصق QR
+        </a>
+        <a href="/caisse" target="_blank" class="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-lg transition font-medium">
+          الصندوق (POS)
+        </a>
+        <a href="/barber" target="_blank" class="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-lg transition font-medium">
+          شاشة الحلاق
+        </a>
+        <a href="/" target="_blank" class="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-lg transition font-medium">
+          شاشة الزبون
+        </a>
+      </div>
+    </header>
+
+    <!-- MOBILE WI-FI PILOT TESTING HERO (المسار 1: تجربة الهاتف الذكي) -->
+    <div class="p-5 rounded-xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-amber-950/50 border-2 border-indigo-500/40 space-y-4 text-xs shadow-2xl relative overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-3xl animate-bounce">📱</span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="font-bold text-zinc-950 text-sm">المسار 1: تجربة المنظومة من هاتفك الذكي الحقيقي (Live Wi-Fi Pilot)</h2>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">جاهز للمسح بالكاميرا</span>
+            </div>
+            <p class="text-[11px] text-zinc-700">امسك هاتفك المحمول وافتحه على نفس شبكة الـ Wi-Fi المنزلية لتجربة حجز الدور والاهتزاز والصوت الحقيقي</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-[11px] text-zinc-500">اختر الصالون للتجربة:</label>
+          <select id="mobile-pilot-salon-select" onchange="updateMobilePilotQR(this.value)" class="bg-zinc-50 border border-zinc-200 text-xs rounded-xl px-3 py-1.5 text-amber-300 font-bold outline-none">
+            {% for s in salons %}
+            <option value="{{ s.id }}">{{ s.name }} ({{ s.commune }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
+        <!-- QR Code Box -->
+        <div class="sm:col-span-4 flex flex-col items-center justify-center p-3 bg-white rounded-xl shadow-xl">
+          <div id="admin-mobile-qrcode" class="p-1"></div>
+          <span class="text-[10px] font-black text-slate-950 mt-1.5 tracking-wider">وجه كاميرا هاتفك وامسح الكود 📷</span>
+        </div>
+
+        <!-- Walkthrough & Connection Info -->
+        <div class="sm:col-span-8 space-y-3">
+          <div class="bg-zinc-50 p-3 rounded-xl border border-zinc-200 space-y-1.5">
+            <span class="text-[11px] text-zinc-500 block">رابط الدخول المباشر للصالون:</span>
+            <div class="flex items-center justify-between gap-2">
+              <span id="mobile-pilot-url" class="font-mono text-zinc-900 font-bold text-xs select-all break-all">
+                {{ base_url }}/salon/{{ salons[0].id if salons else 'salon_dz_1' }}
+              </span>
+              <button onclick="navigator.clipboard.writeText(document.getElementById('mobile-pilot-url').textContent.trim()); showToast('تم نسخ الرابط بنجاح!')" class="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-700 rounded-lg text-xs font-medium border border-zinc-200 transition shrink-0">
+                نسخ الرابط
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200">
+              <span class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] inline-flex items-center justify-center mb-1">1</span>
+              <strong class="text-zinc-950 block text-[11px]">اتصل بالـ Wi-Fi</strong>
+              <p class="text-[9px] text-zinc-500">تأكد أن الهاتف والكمبيوتر متصلان بنفس المودم.</p>
+            </div>
+            <div class="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200">
+              <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 font-black text-[11px] inline-flex items-center justify-center mb-1">2</span>
+              <strong class="text-zinc-950 block text-[11px]">احجز دورك بالهاتف</strong>
+              <p class="text-[9px] text-zinc-500">سجل باسمك كزبون، وشاهد رقم تذكرتك بالدقيقة.</p>
+            </div>
+            <div class="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px] inline-flex items-center justify-center mb-1">3</span>
+              <strong class="text-zinc-950 block text-[11px]">استمع للتنبيه والاهتزاز</strong>
+              <p class="text-[9px] text-zinc-500">اضغط "تنبيه الدور" في شاشة الحلاق واستمع لهاتفك!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% set wholesale_vol = orders|rejectattr('status', 'equalto', 'cancelled')|sum(attribute='wholesale_price') if orders else 0 %}
+    {% set wholesale_profit = orders|rejectattr('status', 'equalto', 'cancelled')|sum(attribute='platform_profit') if orders else 0 %}
+    {% set pending_orders = orders|selectattr('status', 'equalto', 'pending')|list|length if orders else 0 %}
+    {% set shipped_orders = orders|selectattr('status', 'equalto', 'shipped')|list|length if orders else 0 %}
+    {% set delivered_orders = orders|selectattr('status', 'equalto', 'delivered')|list|length if orders else 0 %}
+
+    <!-- KEY FINANCIAL & NETWORK METRICS -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+      <div class="p-4 rounded-xl bg-white border border-zinc-200 space-y-1">
+        <span class="text-zinc-500 block">إجمالي الصالونات النشطة</span>
+        <div class="flex items-baseline gap-2">
+          <strong class="text-2xl font-bold text-zinc-950" id="stat-salons-count">{{ salons|length }}</strong>
+          <span class="text-[10px] text-amber-400 font-bold">صالونات</span>
+        </div>
+        <span class="text-[10px] text-zinc-500 block">العاصمة، وهران، قسنطينة، سطيف...</span>
+      </div>
+
+      <div class="p-4 rounded-xl bg-white border border-zinc-200 space-y-1">
+        <span class="text-zinc-500 block">الزبائن في الانتظار حالياً</span>
+        <div class="flex items-baseline gap-2">
+          {% set total_waiting = salons|sum(attribute='waiting_count') %}
+          <strong class="text-2xl font-black text-amber-400" id="stat-total-waiting">{{ total_waiting }}</strong>
+          <span class="text-[10px] text-amber-300/80 font-bold">زبون في الطابور</span>
+        </div>
+        <span class="text-[10px] text-emerald-400 block">معدل دوران: 18 دقيقة/زبون</span>
+      </div>
+
+      <div class="p-4 rounded-xl bg-white border border-emerald-500/40 space-y-1">
+        <span class="text-zinc-500 block">أرباح تموين الصالونات (B2B Profit)</span>
+        <div class="flex items-baseline gap-2">
+          <strong class="text-2xl font-black text-emerald-400">+{{ "{:,.0f}".format(wholesale_profit) }} د.ج</strong>
+        </div>
+        <span class="text-[10px] text-zinc-500 block">صافي أرباح المنصة من التوزيع</span>
+      </div>
+
+      <div class="p-4 rounded-xl bg-gradient-to-br from-amber-950/60 to-slate-900 border-2 border-amber-500/60 space-y-1 shadow-lg shadow-amber-500/10">
+        <span class="text-amber-300 font-bold block">إجمالي مبيعات الجملة (B2B) ⭐</span>
+        <div class="flex items-baseline gap-2">
+          <strong class="text-2xl font-black text-amber-400">{{ "{:,.0f}".format(wholesale_vol) }} د.ج</strong>
+        </div>
+        <span class="text-[10px] text-amber-300/80 block">{{ orders|length if orders else 0 }} طلبية مسجلة للشبكة</span>
+      </div>
+    </div>
+
+    <!-- NOTIFICATION ALERT BANNER (IF ANY ACTION DONE) -->
+    <div id="status-toast" class="hidden p-3.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-between transition">
+      <div class="flex items-center gap-2">
+        <span>✅</span>
+        <span id="status-toast-text">تمت العملية بنجاح!</span>
+      </div>
+      <button onclick="document.getElementById('status-toast').classList.add('hidden')" class="text-emerald-400 hover:text-white text-sm">✕</button>
+    </div>
+
+    <!-- REGISTERED SALONS TABLE (MULTI-CITY EXPANSION) -->
+    <div class="p-5 rounded-xl bg-white border border-zinc-200 space-y-4 text-xs shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span class="font-bold text-zinc-950 text-sm flex items-center gap-2">
+            <span>💈</span> شبكة الصالونات المتصلة بالنظام (توسع عبر الولايات)
+          </span>
+          <p class="text-[11px] text-zinc-500 mt-0.5">يمكنك تجربة الدخول لشاشة أي حلاق أو بوابة زبائنه أو طباعة ملصق الـ QR الخاص به</p>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <button onclick="location.reload()" class="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl border border-zinc-200 text-[11px] font-bold transition flex items-center gap-1">
+            <span>🔄</span> تحديث الطوابير
+          </button>
+          <button onclick="openAddSalonModal()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-black text-[11px] transition shadow flex items-center gap-1">
+            <span>➕</span> صالون جديد
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border border-zinc-200">
+        <table class="w-full text-right text-xs">
+          <thead class="bg-zinc-50">
+            <tr class="text-zinc-500 border-b border-zinc-200">
+              <th class="py-3 px-3">الصالون</th>
+              <th class="py-3 px-3">الحلاق المسؤول</th>
+              <th class="py-3 px-3">الولاية والبلدية</th>
+              <th class="py-3 px-3 text-center">الزبائن في الانتظار</th>
+              <th class="py-3 px-3 text-center">اشتراك الصالون</th>
+              <th class="py-3 px-3 text-center">الميزات الاختيارية (Addons)</th>
+              <th class="py-3 px-3 text-center">الإجراءات والروابط السريعة</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-200 bg-white">
+            {% for s in salons %}
+            <tr class="hover:bg-zinc-50 transition" id="salon-row-{{ s.id }}">
+              <td class="py-3.5 px-3 font-bold text-zinc-950">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">💈</span>
+                  <div>
+                    <span class="block text-zinc-950 font-bold">{{ s.name }}</span>
+                    <span class="text-[10px] text-zinc-400 font-mono">ID: {{ s.id }}</span>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3.5 px-3 text-zinc-800 font-bold">
+                {{ s.barber_name }}
+              </td>
+              <td class="py-3.5 px-3 text-zinc-700">
+                <span class="inline-block bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold ml-1.5">{{ s.wilaya }}</span>
+                <span class="text-zinc-500">{{ s.commune }}</span>
+              </td>
+              <td class="py-3.5 px-3 text-center">
+                <span class="px-2.5 py-1 rounded-full font-black text-xs {% if s.waiting_count > 0 %}bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse{% else %}bg-zinc-100 text-zinc-500{% endif %}">
+                  {{ s.waiting_count }} زبون
+                </span>
+              </td>
+              <td class="py-3.5 px-3 text-center">
+                {% if s.subscription_status == 'suspended' %}
+                  <span class="inline-flex items-center gap-1 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-black animate-pulse">
+                    🔴 مجمد (معلق)
+                  </span>
+                  <button onclick="toggleSubscription('{{ s.id }}', 'activate')" class="mt-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold block mx-auto transition shadow">
+                    ✓ تفعيل وتمديد 30 يوم
+                  </button>
+                {% else %}
+                  <span class="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
+                    🟢 نشط حتى: {{ s.subscription_expires_at or 'غير محدد' }}
+                  </span>
+                  <button onclick="toggleSubscription('{{ s.id }}', 'suspend')" class="mt-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-900 text-rose-400 border border-rose-500/40 rounded-lg text-[9px] font-bold block mx-auto transition">
+                    🚫 تجميد الصالون
+                  </button>
+                {% endif %}
+              </td>
+              <td class="py-3.5 px-3 text-center">
+                <div class="flex items-center justify-center gap-1 flex-wrap max-w-[170px] mx-auto">
+                  <span class="text-[9px] px-1.5 py-0.5 rounded font-bold {% if s.enable_tv_mode %}bg-emerald-500/20 text-emerald-300 border border-emerald-500/40{% else %}bg-zinc-100 text-zinc-400{% endif %}" title="شاشة التلفاز">📺 TV</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded font-bold {% if s.enable_voice_caller %}bg-blue-500/20 text-blue-300 border border-blue-500/40{% else %}bg-zinc-100 text-zinc-400{% endif %}" title="المنادي الصوتي">🗣️ صوت</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded font-bold {% if s.enable_groom_packs %}bg-amber-500/20 text-amber-300 border border-amber-500/40{% else %}bg-zinc-100 text-zinc-400{% endif %}" title="باقات العرسان">👑 عرسان</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded font-bold {% if s.enable_receipt_print %}bg-purple-500/20 text-purple-300 border border-purple-500/40{% else %}bg-zinc-100 text-zinc-400{% endif %}" title="طباعة الإيصالات">🖨️ طباعة</span>
+                </div>
+                <button 
+                  data-id="{{ s.id }}" 
+                  data-name="{{ s.name }}" 
+                  data-tv="{{ 1 if s.enable_tv_mode else 0 }}" 
+                  data-voice="{{ 1 if s.enable_voice_caller else 0 }}" 
+                  data-groom="{{ 1 if s.enable_groom_packs else 0 }}" 
+                  data-receipt="{{ 1 if s.enable_receipt_print else 0 }}" 
+                  onclick="openModulesModalFromBtn(this)" 
+                  class="mt-1 text-[10px] text-amber-400 hover:text-amber-300 font-bold underline block mx-auto">
+                  ⚙️ تفعيل/تعطيل
+                </button>
+              </td>
+              <td class="py-3.5 px-3 text-center">
+                <div class="inline-flex items-center gap-1.5 flex-wrap justify-center">
+                  <a href="/caisse/{{ s.id }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-1 rounded-xl transition font-bold" title="شاشة لاكيس المكتبي للحاسوب">
+                    <span>🖥️ لاكيس</span>
+                  </a>
+                  <a href="/tv/{{ s.id }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-xl transition font-bold" title="شاشة التلفاز لقاعة الانتظار">
+                    <span>📺 TV</span>
+                  </a>
+                  <a href="/barber/{{ s.id }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-xl transition font-bold" title="لوحة تحكم الحلاق">
+                    <span>✂️ الحلاق</span>
+                  </a>
+                  <a href="/salon/{{ s.id }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-xl transition font-bold" title="بوابة حجز الزبون">
+                    <span>👤 الزبون</span>
+                  </a>
+                  <a href="/salon/{{ s.id }}/poster" target="_blank" class="inline-flex items-center gap-1 text-[11px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-1 rounded-xl transition font-bold" title="طباعة ملصق QR A4">
+                    <span>🖨️ الملصق</span>
+                  </a>
+                  {% if s.id != 'salon_dz_1' %}
+                  <button 
+                    data-id="{{ s.id }}" 
+                    data-name="{{ s.name }}" 
+                    onclick="deleteSalonFromBtn(this)" 
+                    class="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition text-xs" 
+                    title="حذف الصالون">
+                    🗑️
+                  </button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- B2B WHOLESALE STORE & INVENTORY HUB (متجر تموين الصالونات والمخازن المصغرة) -->
+    <div id="store-hub-section" class="p-5 rounded-xl bg-white border border-zinc-200 space-y-4 text-xs shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-xl shadow-lg shadow-amber-500/20">
+            📦
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-bold text-zinc-950">مركز تموين الصالونات بالجملة والمخزون (B2B Wholesale Hub)</h2>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">مستودع التوزيع الفيدرالي</span>
+            </div>
+            <p class="text-[11px] text-zinc-500">متابعة وتجهيز طلبيات السلع المهنية لشبكة الصالونات • أرباح المنصة ومستودعات التوزيع الفيدرالية</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="openProductCatalogModal()" class="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-amber-300 rounded-xl border border-amber-500/40 text-[11px] font-bold transition flex items-center gap-1.5 shadow">
+            <span>🏷️</span> كتالوج الأسعار والمخزون
+          </button>
+          <button onclick="location.reload()" class="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl border border-zinc-200 text-[11px] font-bold transition flex items-center gap-1">
+            <span>🔄</span> تحديث الطلبيات
+          </button>
+        </div>
+      </div>
+
+      <!-- WHOLESALE KPI CARDS -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1">
+          <span class="text-zinc-500 block text-[11px]">إجمالي مبيعات الجملة</span>
+          <div class="flex items-baseline gap-1.5">
+            <strong class="text-lg font-bold text-zinc-950">{{ "{:,.0f}".format(wholesale_vol) }}</strong>
+            <span class="text-[10px] text-zinc-500">د.ج</span>
+          </div>
+          <span class="text-[10px] text-zinc-400 block">حجم الطلبيات المؤكدة</span>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-zinc-50 border border-emerald-500/40 space-y-1">
+          <span class="text-emerald-400 font-bold block text-[11px]">صافي أرباح المنصة</span>
+          <div class="flex items-baseline gap-1.5">
+            <strong class="text-lg font-black text-emerald-400">+{{ "{:,.0f}".format(wholesale_profit) }}</strong>
+            <span class="text-[10px] text-emerald-500">د.ج</span>
+          </div>
+          <span class="text-[10px] text-emerald-300/70 block">هامش ربح التوزيع</span>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-zinc-50 border border-amber-500/40 space-y-1">
+          <span class="text-amber-400 font-bold block text-[11px]">طلبيات قيد التجهيز</span>
+          <div class="flex items-baseline gap-1.5">
+            <strong class="text-lg font-black text-amber-400">{{ pending_orders }}</strong>
+            <span class="text-[10px] text-amber-300">طلبيات جديدة</span>
+          </div>
+          <span class="text-[10px] text-amber-300/70 block">بانتظار الشحن للصالون</span>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-zinc-50 border border-blue-500/40 space-y-1">
+          <span class="text-blue-400 font-bold block text-[11px]">طلبيات تم تسليمها وقبضها</span>
+          <div class="flex items-baseline gap-1.5">
+            <strong class="text-lg font-black text-blue-400">{{ delivered_orders }}</strong>
+            <span class="text-[10px] text-blue-300">طلبيات مكتملة</span>
+          </div>
+          <span class="text-[10px] text-blue-300/70 block">محصلة كاش / بريدي موب</span>
+        </div>
+      </div>
+
+      <!-- FILTER PILLS -->
+      <div class="flex items-center gap-2 pt-1 overflow-x-auto">
+        <button onclick="filterWholesaleOrders('all', this)" class="order-filter-btn px-3 py-1 rounded-xl font-bold text-[11px] bg-amber-500 text-slate-950 shadow transition">
+          الكل ({{ orders|length if orders else 0 }})
+        </button>
+        <button onclick="filterWholesaleOrders('pending', this)" class="order-filter-btn px-3 py-1 rounded-xl font-bold text-[11px] bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition">
+          🟡 قيد المعالجة ({{ pending_orders }})
+        </button>
+        <button onclick="filterWholesaleOrders('shipped', this)" class="order-filter-btn px-3 py-1 rounded-xl font-bold text-[11px] bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition">
+          🚚 قيد التوصيل ({{ shipped_orders }})
+        </button>
+        <button onclick="filterWholesaleOrders('delivered', this)" class="order-filter-btn px-3 py-1 rounded-xl font-bold text-[11px] bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition">
+          ✅ تم التسليم ({{ delivered_orders }})
+        </button>
+      </div>
+
+      <!-- ORDERS TABLE -->
+      <div class="overflow-x-auto rounded-xl border border-zinc-200">
+        <table class="w-full text-right text-xs" id="wholesale-orders-table">
+          <thead class="bg-zinc-50">
+            <tr class="text-zinc-500 border-b border-zinc-200">
+              <th class="py-3 px-3">رقم الطلب والتاريخ</th>
+              <th class="py-3 px-3">الصالون والولاية</th>
+              <th class="py-3 px-3">السلعة المطلوبة</th>
+              <th class="py-3 px-3 text-center">سعر الجملة</th>
+              <th class="py-3 px-3 text-center">ربح المنصة</th>
+              <th class="py-3 px-3 text-center">الحالة</th>
+              <th class="py-3 px-3 text-center">الإجراءات والوصل</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-200 bg-white">
+            {% if orders and orders|length > 0 %}
+              {% for o in orders %}
+              <tr class="hover:bg-zinc-50 transition wholesale-order-row" data-status="{{ o.status }}" id="order-row-{{ o.id }}">
+                <td class="py-3.5 px-3">
+                  <div class="font-mono font-bold text-amber-300 text-xs">#{{ o.id }}</div>
+                  <span class="text-[10px] text-zinc-400">{{ o.ordered_at or 'اليوم' }}</span>
+                </td>
+                <td class="py-3.5 px-3">
+                  <strong class="text-zinc-950 block font-extrabold">{{ o.salon_name or o.salon_id }}</strong>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20 font-bold">{{ o.wilaya or 'الجزائر' }}</span>
+                    <span class="text-[10px] text-zinc-500 font-mono">{{ o.barber_phone or '' }}</span>
+                  </div>
+                </td>
+                <td class="py-3.5 px-3">
+                  <strong class="text-zinc-950 block">{{ o.item_name }}</strong>
+                  <span class="text-[10px] text-zinc-500">الوحدة: {{ o.unit or 'علبة/قارورة' }}</span>
+                </td>
+                <td class="py-3.5 px-3 text-center">
+                  <span class="text-xs font-black text-amber-400">{{ "{:,.0f}".format(o.wholesale_price or 0) }} د.ج</span>
+                </td>
+                <td class="py-3.5 px-3 text-center">
+                  <span class="text-xs font-black text-emerald-400">+{{ "{:,.0f}".format(o.platform_profit or 0) }} د.ج</span>
+                </td>
+                <td class="py-3.5 px-3 text-center" id="order-badge-col-{{ o.id }}">
+                  {% if o.status == 'pending' %}
+                    <span class="inline-flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full font-bold animate-pulse">
+                      🟡 قيد التجهيز
+                    </span>
+                  {% elif o.status == 'shipped' %}
+                    <span class="inline-flex items-center gap-1 text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-full font-bold">
+                      🚚 قيد الشحن
+                    </span>
+                  {% elif o.status == 'delivered' %}
+                    <span class="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-full font-bold">
+                      ✅ تم التسليم والقبض
+                    </span>
+                  {% else %}
+                    <span class="inline-flex items-center gap-1 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2.5 py-1 rounded-full font-bold">
+                      ✕ ملغاة
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-3.5 px-3 text-center">
+                  <div class="inline-flex items-center gap-1.5 flex-wrap justify-center">
+                    {% if o.status == 'pending' %}
+                      <button onclick="updateOrderStatus('{{ o.id }}', 'shipped')" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-zinc-950 font-bold rounded-lg text-[10px] transition shadow flex items-center gap-1" title="تأكيد الشحن مع الموزع">
+                        <span>🚚</span> شحن
+                      </button>
+                    {% elif o.status == 'shipped' %}
+                      <button onclick="updateOrderStatus('{{ o.id }}', 'delivered')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold rounded-lg text-[10px] transition shadow flex items-center gap-1" title="تسليم وقبض المبلغ نقداً/بريدي موب">
+                        <span>✅</span> تسليم وقبض
+                      </button>
+                    {% endif %}
+
+                    <button 
+                      data-id="{{ o.id }}" 
+                      data-salon="{{ o.salon_name or o.salon_id }}" 
+                      data-barber="{{ o.barber_name or 'المعلم' }}" 
+                      data-phone="{{ o.barber_phone or '' }}" 
+                      data-wilaya="{{ o.wilaya or 'الجزائر' }}" 
+                      data-commune="{{ o.commune or '' }}" 
+                      data-item="{{ o.item_name }}" 
+                      data-unit="{{ o.unit or 'وحدة' }}" 
+                      data-price="{{ o.wholesale_price or 0 }}" 
+                      data-date="{{ o.ordered_at or '' }}" 
+                      onclick="openDeliverySlipModal(this)" 
+                      class="px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 text-purple-300 border border-purple-500/30 rounded-lg text-[10px] font-bold transition flex items-center gap-1" 
+                      title="طباعة وصل توصيل البضاعة للصالون">
+                      <span>🖨️</span> وصل التوصيل
+                    </button>
+
+                    {% if o.status != 'cancelled' and o.status != 'delivered' %}
+                      <button onclick="updateOrderStatus('{{ o.id }}', 'cancelled')" class="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs transition" title="إلغاء الطلبية">
+                        ✕
+                      </button>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="py-8 text-center text-zinc-400">
+                  <span class="text-3xl block mb-2">📦</span>
+                  لا توجد طلبيات تموين حالياً. يمكن للحلاقين الطلب مباشرة من شاشة الحلاق.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 3. FREELANCE MOBILE BARBERS HUB (إدارة شبكة الحلاقين المتنقلين والخدمات المنزلية) -->
+    <div class="space-y-4">
+      <!-- Section Title & Badge -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-lg">
+            🛵
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-zinc-950 flex items-center gap-2">
+              <span>إدارة الحلاقين الأحرار والخدمات المنزلية</span>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">Bricoram / Yassir Model</span>
+            </h2>
+            <p class="text-xs text-zinc-500">مراقبة شبكة الحلاقين المتنقلين، التحقق من الحسابات، وعمولة المنصة (10%)</p>
+          </div>
+        </div>
+        <span class="text-xs font-bold text-zinc-500">
+          إجمالي الحلاقين: <strong class="text-emerald-400">{{ freelancers|length }}</strong>
+        </span>
+      </div>
+
+      <!-- Freelance KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="p-4 rounded-xl bg-white border border-zinc-200 space-y-1">
+          <span class="text-[10px] text-zinc-500 block font-bold">الحلاقون المتصلون الآن 🟢</span>
+          <strong class="text-xl font-black text-emerald-400">
+            {{ freelancers|selectattr('is_online', 'equalto', 1)|list|length }}
+          </strong>
+          <span class="text-[9px] text-zinc-400 block">جاهزون لاستقبال طلبات المنازل</span>
+        </div>
+
+        <div class="p-4 rounded-xl bg-white border border-zinc-200 space-y-1">
+          <span class="text-[10px] text-zinc-500 block font-bold">طلبات المنازل المنجزة ✂️</span>
+          <strong class="text-xl font-bold text-zinc-950">
+            {{ home_requests|selectattr('status', 'equalto', 'completed')|list|length }}
+          </strong>
+          <span class="text-[9px] text-zinc-400 block">من إجمالي {{ home_requests|length }} طلب</span>
+        </div>
+
+        <div class="p-4 rounded-xl bg-white border border-zinc-200 space-y-1">
+          <span class="text-[10px] text-zinc-500 block font-bold">حجم تداول الخدمات 💵</span>
+          <strong class="text-xl font-black text-amber-400">
+            {% set total_home_rev = namespace(val=0) %}
+            {% for r in home_requests if r.status == 'completed' %}
+              {% set total_home_rev.val = total_home_rev.val + r.price %}
+            {% endfor %}
+            {{ total_home_rev.val|int }} د.ج
+          </strong>
+          <span class="text-[9px] text-zinc-400 block">مدخول الحلاقة المنزلية</span>
+        </div>
+
+        <div class="p-4 rounded-xl bg-white border border-zinc-200 space-y-1">
+          <span class="text-[10px] text-zinc-500 block font-bold">أرباح عمولة المنصة (10%) 💰</span>
+          <strong class="text-xl font-black text-teal-400">
+            {{ (total_home_rev.val * 0.10)|int }} د.ج
+          </strong>
+          <span class="text-[9px] text-emerald-400 font-bold block">مداخيل صافية للمنصة</span>
+        </div>
+      </div>
+
+      <!-- Freelancers Table -->
+      <div class="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-xl">
+        <div class="p-4 border-b border-zinc-200 flex items-center justify-between">
+          <h3 class="text-xs font-bold text-zinc-950 flex items-center gap-1.5">
+            <span>🛵</span>
+            <span>قائمة الحلاقين الأحرار المعتمدين والجدد</span>
+          </h3>
+          <span class="text-[11px] text-zinc-500">تحكم فوري بحالة الاعتماد</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-right text-xs">
+            <thead class="bg-zinc-50 text-zinc-500 text-[10px] uppercase font-bold border-b border-zinc-200">
+              <tr>
+                <th class="py-3 px-4">الحلاق والوسيلة</th>
+                <th class="py-3 px-4">الهاتف</th>
+                <th class="py-3 px-4">البلدية ومناطق التغطية</th>
+                <th class="py-3 px-4">التقييم والمهام</th>
+                <th class="py-3 px-4">عمولة المنصة المستحقة</th>
+                <th class="py-3 px-4">حالة الاتصال</th>
+                <th class="py-3 px-4">الاعتماد والإجراءات</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-200 font-medium">
+              {% for f in freelancers %}
+              <tr class="hover:bg-zinc-100/40 transition">
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">{% if f.vehicle_type == 'car' %}🚗{% else %}🛵{% endif %}</span>
+                    <div>
+                      <a href="/freelance/{{ f.id }}" target="_blank" class="font-bold text-zinc-950 hover:text-emerald-400 transition">{{ f.name }}</a>
+                      <span class="text-[10px] text-zinc-400 block">بدء: {{ f.base_price|int }} د.ج</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-3 px-4 font-mono text-zinc-700">{{ f.phone }}</td>
+                <td class="py-3 px-4">
+                  <span class="font-bold text-zinc-950 block">{{ f.commune }}</span>
+                  <span class="text-[10px] text-zinc-500 max-w-xs truncate block" title="{{ f.working_zones }}">{{ f.working_zones }}</span>
+                </td>
+                <td class="py-3 px-4">
+                  <span class="text-amber-400 font-bold block">⭐ {{ f.rating }} ({{ f.reviews_count }})</span>
+                  <span class="text-[10px] text-zinc-500">{{ f.completed_jobs }} مهمة منجزة</span>
+                </td>
+                <td class="py-3 px-4">
+                  <span class="font-black text-emerald-400 block">{{ f.platform_commission|int }} د.ج</span>
+                  <span class="text-[10px] text-zinc-400">10% من {{ f.gross_earnings|int }} د.ج</span>
+                </td>
+                <td class="py-3 px-4">
+                  {% if f.is_online %}
+                  <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-max">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> متصل
+                  </span>
+                  {% else %}
+                  <span class="text-[10px] bg-zinc-100 text-zinc-500 border border-zinc-200 px-2 py-0.5 rounded-full font-bold w-max block">
+                    غير متصل
+                  </span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="toggleFreelancerVerify('{{ f.id }}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition {% if f.is_verified %}bg-emerald-50 text-emerald-700 border border-emerald-200/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900{% else %}bg-amber-50 text-amber-800 border border-amber-200 border-amber-500/40 text-amber-300 hover:bg-amber-900{% endif %}">
+                      {% if f.is_verified %}✔ معتمد{% else %}⏳ تفعيل الاعتماد{% endif %}
+                    </button>
+                    <a href="/freelance/{{ f.id }}" target="_blank" class="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 text-[10px] font-bold transition" title="فتح شاشة الحلاق">
+                      👁️
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pending Wallet Recharges Table -->
+      <div class="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-xl">
+        <div class="p-4 border-b border-zinc-200 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-amber-400 text-lg">💳</span>
+            <div>
+              <h3 class="text-xs font-bold text-zinc-950">طلبات شحن رصيد الحلاقين (BaridiMob Recharges)</h3>
+              <p class="text-[10px] text-zinc-500">تأكيد تحويلات بريدي موب وإضافة الرصيد لحساب الحلاق فوراً</p>
+            </div>
+          </div>
+          <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
+            {{ recharges|selectattr('status', 'equalto', 'pending')|list|length }} طلب معلق
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-right text-xs">
+            <thead class="bg-zinc-50 text-zinc-500 text-[10px] uppercase font-bold border-b border-zinc-200">
+              <tr>
+                <th class="py-3 px-4">الحلاق</th>
+                <th class="py-3 px-4">المبلغ</th>
+                <th class="py-3 px-4">رقم التحويل / مرجع الوصل</th>
+                <th class="py-3 px-4 text-center">وصل التحويل (Screenshot)</th>
+                <th class="py-3 px-4">التاريخ</th>
+                <th class="py-3 px-4">الحالة</th>
+                <th class="py-3 px-4">الإجراء</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-200 font-medium">
+              {% if recharges %}
+                {% for rc in recharges %}
+                <tr class="hover:bg-zinc-100/40 transition">
+                  <td class="py-3 px-4 font-bold text-zinc-950">
+                    {{ rc.barber_name or rc.barber_id }}
+                    <span class="text-[10px] text-zinc-500 block">{{ rc.barber_phone }}</span>
+                  </td>
+                  <td class="py-3 px-4 font-black text-emerald-400">{{ rc.amount|int }} د.ج</td>
+                  <td class="py-3 px-4 font-mono text-amber-300 text-[11px]">{{ rc.transaction_ref }}</td>
+                  <td class="py-3 px-4 text-center">
+                    {% if rc.receipt_image %}
+                    <button type="button" onclick="previewDocImage('{{ rc.receipt_image }}', 'وصل بريدي موب - {{ rc.barber_name or rc.barber_id }} ({{ rc.amount|int }} د.ج)')" class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-[10px] font-bold transition">
+                      <span>🖼️</span>
+                      <span>معاينة الوصل</span>
+                    </button>
+                    {% else %}
+                    <span class="text-slate-600 text-[10px]">لا يوجد وصل</span>
+                    {% endif %}
+                  </td>
+                  <td class="py-3 px-4 text-zinc-500 text-[10px]">{{ (rc.created_at|string)[:16] }}</td>
+                  <td class="py-3 px-4">
+                    {% if rc.status == 'pending' %}
+                    <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">معلق ⏳</span>
+                    {% elif rc.status == 'approved' %}
+                    <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">تم القبول ✔</span>
+                    {% else %}
+                    <span class="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold">مرفوض ✕</span>
+                    {% endif %}
+                  </td>
+                  <td class="py-3 px-4">
+                    {% if rc.status == 'pending' %}
+                    <button onclick="approveRecharge('{{ rc.id }}')" class="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 font-black text-[10px] rounded-lg shadow transition">
+                      ✅ قبول وشحن
+                    </button>
+                    {% else %}
+                    <span class="text-zinc-400 text-[10px] font-bold">مكتمل</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="7" class="py-6 text-center text-zinc-400 text-xs">
+                    لا توجد طلبات شحن رصيد حالياً.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- KYC National ID Verifications Table -->
+      <div class="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-xl">
+        <div class="p-4 border-b border-zinc-200 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sky-400 text-lg">🪪</span>
+            <div>
+              <h3 class="text-xs font-bold text-zinc-950">توثيق الهوية الوطنية للحلاقين المتنقلين (KYC)</h3>
+              <p class="text-[10px] text-zinc-500">مراجعة بطاقة التعريف البيومترية والصورة الشخصية لضمان أمان الزبائن وحرمة البيوت</p>
+            </div>
+          </div>
+          <span class="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded-full font-bold">
+            {{ kyc_requests|selectattr('kyc_status', 'equalto', 'pending')|list|length }} بانتظار المراجعة
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-right text-xs">
+            <thead class="bg-zinc-50 text-zinc-500 text-[10px] uppercase font-bold border-b border-zinc-200">
+              <tr>
+                <th class="py-3 px-4">الحلاق</th>
+                <th class="py-3 px-4">رقم بطاقة التعريف (NIN)</th>
+                <th class="py-3 px-4 text-center">وثائق الهوية والعتاد 🧰</th>
+                <th class="py-3 px-4">البلدية والتنقل</th>
+                <th class="py-3 px-4">الحالة الأمنية</th>
+                <th class="py-3 px-4">الإجراء</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y border-zinc-200 font-medium">
+              {% if kyc_requests %}
+                {% for kyc in kyc_requests %}
+                <tr class="hover:bg-zinc-100/40 transition">
+                  <td class="py-3 px-4 font-bold text-zinc-950">
+                    {{ kyc.name }}
+                    <span class="text-[10px] text-zinc-500 block">{{ kyc.phone }}</span>
+                  </td>
+                  <td class="py-3 px-4 font-mono text-sky-300 text-xs">
+                    {{ kyc.id_card_number or 'لم يُدخل الرقم بعد' }}
+                  </td>
+                  <td class="py-3 px-4 text-center">
+                    <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                      <button type="button" onclick="previewDocImage('{{ kyc.id_card_front or '' }}', 'بطاقة التعريف الوطنية - {{ kyc.name }} (NIN: {{ kyc.id_card_number }})')" class="px-2 py-0.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-lg text-[9px] font-bold transition">
+                        🪪 البطاقة
+                      </button>
+                      {% if kyc.equipment_photo %}
+                      <button type="button" onclick="previewDocImage('{{ kyc.equipment_photo }}', 'حقيبة العتاد والأدوات المعقمة - {{ kyc.name }}')" class="px-2 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-[9px] font-bold transition">
+                        ✂️ العتاد
+                      </button>
+                      {% else %}
+                      <span class="text-slate-600 text-[9px]">بدون عتاد</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td class="py-3 px-4 text-zinc-700 text-[11px]">
+                    {{ kyc.commune }} 
+                    <span class="text-[10px] text-zinc-400 block">({{ 'دراجة نارية 🛵' if kyc.vehicle_type == 'moto' else 'سيارة 🚗' }})</span>
+                  </td>
+                  <td class="py-3 px-4">
+                    {% if kyc.kyc_status == 'approved' and kyc.is_verified == 1 %}
+                    <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">موثق ومعتمد 🛡️</span>
+                    {% elif kyc.kyc_status == 'pending' %}
+                    <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">بانتظار التحقق ⏳</span>
+                    {% elif kyc.kyc_status == 'rejected' %}
+                    <span class="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold">مرفوض ✕</span>
+                    {% else %}
+                    <span class="text-[10px] bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full font-bold">غير مكتمل</span>
+                    {% endif %}
+                  </td>
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-1.5">
+                      {% if kyc.kyc_status != 'approved' %}
+                      <button onclick="reviewKyc('{{ kyc.id }}', 'approve')" class="px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 font-black text-[10px] rounded-lg shadow transition">
+                        ✅ اعتماد وتوثيق
+                      </button>
+                      {% endif %}
+                      {% if kyc.kyc_status != 'rejected' %}
+                      <button onclick="reviewKyc('{{ kyc.id }}', 'reject')" class="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-900 border border-rose-500/50 text-rose-300 font-bold text-[10px] rounded-lg transition">
+                        ❌ رفض
+                      </button>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="6" class="py-6 text-center text-zinc-400 text-xs">
+                    لا توجد ملفات توثيق حالياً.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ADD SALON MODAL -->
+  <div id="add-salon-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-amber-500/60 rounded-xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">💈</span>
+          <div>
+            <h3 class="text-base font-bold text-zinc-950">إضافة صالون جديد في ولاية أخرى</h3>
+            <p class="text-[11px] text-zinc-500">سيتم إنشاء حساب الحلاق، بوابة الزبائن، وملصق الـ QR تلقائياً</p>
+          </div>
+        </div>
+        <button onclick="closeAddSalonModal()" class="text-zinc-500 hover:text-white text-lg">✕</button>
+      </div>
+
+      <form id="add-salon-form" onsubmit="submitNewSalon(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-zinc-700 font-bold mb-1">اسم الصالون التجاري:</label>
+          <input type="text" id="new-salon-name" required placeholder="مثال: صالون الأوراس بريميوم" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-2.5 text-zinc-950 font-bold outline-none focus:border-amber-400">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-700 font-bold mb-1">الحلاق المسؤول (المعلم):</label>
+            <input type="text" id="new-barber-name" required placeholder="مثال: المعلم سمير" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-2.5 text-zinc-950 font-bold outline-none focus:border-amber-400">
+          </div>
+          <div>
+            <label class="block text-zinc-700 font-bold mb-1">رقم الهاتف:</label>
+            <input type="tel" id="new-salon-phone" required placeholder="0550123456" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-2.5 text-zinc-950 font-bold outline-none focus:border-amber-400 font-mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-700 font-bold mb-1">الولاية:</label>
+            <select id="new-salon-wilaya" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-2.5 text-amber-300 font-bold outline-none focus:border-amber-400">
+              <option value="الجزائر العاصمة (16)">16 - الجزائر العاصمة</option>
+              <option value="وهران (31)">31 - وهران</option>
+              <option value="قسنطينة (25)">25 - قسنطينة</option>
+              <option value="سطيف (19)">19 - سطيف</option>
+              <option value="البليدة (09)">09 - البليدة</option>
+              <option value="عنابة (23)">23 - عنابة</option>
+              <option value="باتنة (05)">05 - باتنة</option>
+              <option value="تلمسان (13)">13 - تلمسان</option>
+              <option value="بجاية (06)">06 - بجاية</option>
+              <option value="تيزي وزو (15)">15 - تيزي وزو</option>
+              <option value="سيدي بلعباس (22)">22 - سيدي بلعباس</option>
+              <option value="بسكرة (07)">07 - بسكرة</option>
+              <option value="مستغانم (27)">27 - مستغانم</option>
+              <option value="بومرداس (35)">35 - بومرداس</option>
+              <option value="تيبازة (42)">42 - تيبازة</option>
+              <option value="الشلف (02)">02 - الشلف</option>
+              <option value="ورقلة (30)">30 - ورقلة</option>
+              <option value="الوادي (39)">39 - الوادي</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-zinc-700 font-bold mb-1">البلدية أو الحي:</label>
+            <input type="text" id="new-salon-commune" required placeholder="مثال: وسط المدينة" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-2.5 text-zinc-950 font-bold outline-none focus:border-amber-400">
+          </div>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-2 border-t border-zinc-200">
+          <button type="button" onclick="closeAddSalonModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition">
+            إلغاء
+          </button>
+          <button type="submit" id="submit-salon-btn" class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl shadow-lg transition flex items-center gap-1.5">
+            <span>🚀</span> حفظ وإطلاق الصالون
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODULES TOGGLE MODAL (الميزات الاختيارية لكل صالون) -->
+  <div id="modules-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-indigo-500/80 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">⚙️</span>
+          <div>
+            <h3 class="text-base font-bold text-zinc-950" id="modules-salon-title">تفعيل الميزات الاختيارية للصالون</h3>
+            <p class="text-[11px] text-zinc-500">تحكم مدير المنصة (الأدمن) في الموديولات المفعلة</p>
+          </div>
+        </div>
+        <button onclick="closeModulesModal()" class="text-zinc-500 hover:text-white text-lg">✕</button>
+      </div>
+
+      <input type="hidden" id="modules-salon-id">
+
+      <div class="space-y-3 text-xs">
+        <!-- 1. TV Mode -->
+        <label class="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-200 cursor-pointer hover:border-zinc-200 transition">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📺</span>
+            <div>
+              <strong class="text-zinc-950 block text-sm">وضع شاشة التلفاز (TV Screen)</strong>
+              <span class="text-[10px] text-zinc-500">بث مباشر على تلفاز الصالون الذكي (/tv)</span>
+            </div>
+          </div>
+          <input type="checkbox" id="mod-toggle-tv" class="w-5 h-5 rounded text-emerald-500 accent-emerald-500">
+        </label>
+
+        <!-- 2. Voice Caller -->
+        <label class="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-200 cursor-pointer hover:border-zinc-200 transition">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🗣️</span>
+            <div>
+              <strong class="text-zinc-950 block text-sm">المنادي الصوتي الآلي (Voice Caller)</strong>
+              <span class="text-[10px] text-zinc-500">نداء ناطق بالدارجة: "تفضل يا فلان، الكرسي واجد"</span>
+            </div>
+          </div>
+          <input type="checkbox" id="mod-toggle-voice" class="w-5 h-5 rounded text-blue-500 accent-blue-500">
+        </label>
+
+        <!-- 3. Groom Packs -->
+        <label class="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-200 cursor-pointer hover:border-zinc-200 transition">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">👑</span>
+            <div>
+              <strong class="text-zinc-950 block text-sm">باقات العرسان والمناسبات (Pack 3arous)</strong>
+              <span class="text-[10px] text-zinc-500">حجز مسبق VIP للعرسان والمناسبات الخاصة</span>
+            </div>
+          </div>
+          <input type="checkbox" id="mod-toggle-groom" class="w-5 h-5 rounded text-amber-500 accent-amber-500">
+        </label>
+
+        <!-- 4. Receipt Printing -->
+        <label class="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-200 cursor-pointer hover:border-zinc-200 transition">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🖨️</span>
+            <div>
+              <strong class="text-zinc-950 block text-sm">طباعة التذكرة والإيصال (Thermal Print)</strong>
+              <span class="text-[10px] text-zinc-500">وصل سريع لطابعات الإيصالات 58mm/80mm</span>
+            </div>
+          </div>
+          <input type="checkbox" id="mod-toggle-receipt" class="w-5 h-5 rounded text-purple-500 accent-purple-500">
+        </label>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-2 border-t border-zinc-200">
+        <button type="button" onclick="closeModulesModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition">
+          إلغاء
+        </button>
+        <button type="button" onclick="submitModulesUpdate()" class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-zinc-950 font-bold rounded-xl shadow-lg transition">
+          ✓ حفظ الميزات المفعلة
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MASTER ADMIN SETTINGS MODAL -->
+  <div id="admin-settings-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-amber-500 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">⚙️</span>
+          <div>
+            <h3 class="text-base font-bold text-zinc-950">إعدادات المدير العام (Super Admin)</h3>
+            <p class="text-[11px] text-zinc-500">تعديل الرمز السري وحساب بريدي موب لاستقبال الاشتراكات</p>
+          </div>
+        </div>
+        <button onclick="closeAdminSettingsModal()" class="text-zinc-500 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-zinc-700 font-bold mb-1">الرمز السري الرئيسي (Master PIN):</label>
+          <input type="text" id="setting-master-pin" value="{{ admin_settings.master_pin if admin_settings else '2026' }}" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-center text-sm outline-none">
+          <span class="text-[10px] text-zinc-400 mt-0.5 block">الرمز المستخدم لتسجيل الدخول إلى لوحة الأدمن.</span>
+        </div>
+
+        <div>
+          <label class="block text-zinc-700 font-bold mb-1">رقم هاتف الإدارة (للتواصل والتفعيل):</label>
+          <input type="tel" id="setting-admin-phone" value="{{ admin_settings.admin_phone if admin_settings else '0555 12 34 56' }}" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-white font-mono text-center outline-none">
+          <span class="text-[10px] text-zinc-400 mt-0.5 block">يظهر للحلاقين عند تجميد حساباتهم للتواصل معك.</span>
+        </div>
+
+        <div>
+          <label class="block text-zinc-700 font-bold mb-1">رقم RIP بريدي موب لاستقبال الاشتراكات (20 رقم):</label>
+          <input type="text" id="setting-admin-rip" maxlength="20" value="{{ admin_settings.admin_rip if admin_settings else '00799999000123456789' }}" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-amber-400 font-mono text-center text-xs outline-none">
+          <span class="text-[10px] text-zinc-400 mt-0.5 block">حسابك الذي يحول إليه الحلاقون رسوم الاشتراك الشهري.</span>
+        </div>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-2 border-t border-zinc-200">
+        <button type="button" onclick="closeAdminSettingsModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition">
+          إلغاء
+        </button>
+        <button type="button" onclick="saveAdminSettings()" class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl shadow-lg transition">
+          ✓ حفظ الإعدادات
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELIVERY SLIP MODAL (وصل التوصيل B2B - Bon de Livraison) -->
+  <div id="delivery-slip-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-purple-500/70 rounded-xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🖨️</span>
+          <div>
+            <h3 class="text-base font-bold text-zinc-950">وصل تسليم بضاعة بالجملة (Bon de Livraison)</h3>
+            <p class="text-[11px] text-zinc-500">وثيقة تسليم رسمية للتوقيع عليها عند تسليم الطلبية وقبض المبلغ</p>
+          </div>
+        </div>
+        <button onclick="closeDeliverySlipModal()" class="text-zinc-500 hover:text-white text-lg">✕</button>
+      </div>
+
+      <!-- Printable Area -->
+      <div id="printable-delivery-slip" class="bg-white text-slate-900 p-5 rounded-xl space-y-3.5 text-xs font-sans border-2 border-slate-300">
+        <!-- Slip Header -->
+        <div class="flex items-start justify-between border-b-2 border-slate-900 pb-3">
+          <div>
+            <h2 class="text-base font-black text-slate-950">شبكة دورك للتموين والتوزيع (DOURAK B2B)</h2>
+            <span class="text-[10px] text-slate-600 block">منصة إدارة الصالونات ونقاط التوزيع الفيدرالية</span>
+            <span class="text-[10px] text-slate-600 block">هاتف الموزع: <strong>{{ admin_settings.admin_phone if admin_settings else '0555 12 34 56' }}</strong></span>
+          </div>
+          <div class="text-left">
+            <span class="bg-white text-white font-mono font-black text-xs px-2.5 py-1 rounded">BON DE LIVRAISON</span>
+            <span id="slip-order-id" class="font-mono font-bold text-xs block mt-1 text-slate-800">#ord_XXXX</span>
+            <span id="slip-date" class="text-[10px] text-zinc-400 block">التاريخ: اليوم</span>
+          </div>
+        </div>
+
+        <!-- Salon Info -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-700">الصالون المستلم:</span>
+            <strong id="slip-salon-name" class="text-slate-950 font-black text-sm">صالون الحلاقة</strong>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">الحلاق المسؤول:</span>
+            <span id="slip-barber-name" class="font-bold text-slate-800">المعلم</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">العنوان والولاية:</span>
+            <span id="slip-location" class="font-bold text-slate-800">الولاية، البلدية</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">الهاتف للتأكيد:</span>
+            <span id="slip-phone" class="font-mono font-bold text-slate-800">0550...</span>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <table class="w-full text-right border-collapse border border-slate-300">
+          <thead>
+            <tr class="bg-slate-100 text-slate-800 border-b border-slate-300">
+              <th class="p-2 border-l border-slate-300">السلعة / البيان</th>
+              <th class="p-2 border-l border-slate-300 text-center">الكمية</th>
+              <th class="p-2 text-left">المبلغ الصافي</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td id="slip-item-name" class="p-2.5 font-bold text-slate-900 border-l border-slate-300">شامبو صالونات احترافي</td>
+              <td id="slip-unit" class="p-2.5 text-center text-slate-700 border-l border-slate-300">1 بيدون (5L)</td>
+              <td id="slip-price" class="p-2.5 text-left font-black text-slate-950">1,800 د.ج</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="bg-white text-zinc-950 font-bold">
+              <td colspan="2" class="p-2.5 text-right">المجموع الواجب تحصيله نقداً أو بريدي موب:</td>
+              <td id="slip-total-amount" class="p-2.5 text-left text-sm text-amber-300 font-mono">1,800 د.ج</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <!-- Signature Boxes -->
+        <div class="grid grid-cols-2 gap-4 pt-2 text-center text-[10px] text-slate-600">
+          <div class="border border-slate-300 rounded-xl p-2.5 h-16 flex flex-col justify-between">
+            <span>ختم وتوقيع الموزع / الإدارة:</span>
+            <span class="text-zinc-500">دورك الجزائر</span>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-2.5 h-16 flex flex-col justify-between">
+            <span>توقيع وختم الحلاق (استلام وموافقة):</span>
+            <span class="text-zinc-500">استلمت البضاعة مطابقة</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-2 border-t border-zinc-200">
+        <button type="button" onclick="closeDeliverySlipModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition text-xs">
+          إغلاق
+        </button>
+        <button type="button" onclick="printDeliverySlip()" class="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-zinc-950 font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-1.5">
+          <span>🖨️</span> طباعة الوصل (Imprimer)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT CATALOG & STOCK MODAL -->
+  <div id="product-catalog-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-amber-500/70 rounded-xl p-6 w-full max-w-2xl shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-zinc-200 pb-3 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🏷️</span>
+          <div>
+            <h3 class="text-base font-bold text-zinc-950">كتالوج أسعار المنتجات والمخزون</h3>
+            <p class="text-[11px] text-zinc-500">تعديل أسعار البيع، هامش ربح المنصة، وتحديث كميات المخزون المتوفرة</p>
+          </div>
+        </div>
+        <button onclick="closeProductCatalogModal()" class="text-zinc-500 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="overflow-y-auto space-y-3 flex-1 pr-1 text-xs">
+        <div class="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
+          <span class="text-zinc-500">💡 تنبيه المدير العام:</span>
+          <span class="text-amber-300 font-bold text-[11px]">التعديل ينعكس فوراً على شاشة الحلاق وبوابة حجز الزبائن</span>
+        </div>
+
+        <div class="space-y-2">
+          {% if products %}
+            {% for p in products %}
+            <div class="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 hover:border-zinc-200 transition space-y-2" id="prod-card-{{ p.id }}">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">{{ p.icon or '✨' }}</span>
+                  <div>
+                    <strong class="text-zinc-950 block text-sm">{{ p.name }}</strong>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <span class="text-[10px] px-2 py-0.2 rounded-full font-bold {% if p.type == 'b2b_supply' %}bg-blue-500/20 text-blue-300 border border-blue-500/40{% else %}bg-emerald-500/20 text-emerald-300 border border-emerald-500/40{% endif %}">
+                        {{ '📦 جملة صالونات (B2B)' if p.type == 'b2b_supply' else '👤 بيع للزبون (B2C Hero)' }}
+                      </span>
+                      <span class="text-[10px] text-zinc-400 font-mono">ID: {{ p.id }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-900">
+                <div>
+                  <label class="block text-[10px] text-zinc-500 mb-1">سعر البيع (د.ج):</label>
+                  <input type="number" id="input-price-{{ p.id }}" value="{{ p.price|int }}" class="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-1.5 text-amber-300 font-bold outline-none text-xs">
+                </div>
+                <div>
+                  <label class="block text-[10px] text-zinc-500 mb-1">ربح المنصة/العمولة (د.ج):</label>
+                  <input type="number" id="input-profit-{{ p.id }}" value="{{ p.commission_or_profit|int }}" class="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-1.5 text-emerald-400 font-bold outline-none text-xs">
+                </div>
+                <div>
+                  <label class="block text-[10px] text-zinc-500 mb-1">الكمية المتوفرة بالمخزن:</label>
+                  <div class="flex items-center gap-1.5">
+                    <input type="number" id="input-stock-{{ p.id }}" value="{{ p.stock_count or 0 }}" class="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-1.5 text-zinc-950 font-bold outline-none text-xs">
+                    <button type="button" onclick="saveProductUpdate('{{ p.id }}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold rounded-xl text-[10px] transition shrink-0">
+                      حفظ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-zinc-200 flex justify-end shrink-0">
+        <button type="button" onclick="closeProductCatalogModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition text-xs">
+          إغلاق النافذة
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    let qrcodeInstance = null;
+
+    function updateMobilePilotQR(salonId) {
+      const targetUrl = window.location.origin + '/salon/' + salonId;
+      const urlDisplay = document.getElementById('mobile-pilot-url');
+      if (urlDisplay) urlDisplay.textContent = targetUrl;
+
+      const container = document.getElementById('admin-mobile-qrcode');
+      if (!container) return;
+      container.innerHTML = '';
+      
+      qrcodeInstance = new QRCode(container, {
+        text: targetUrl,
+        width: 140,
+        height: 140,
+        colorDark : "#09090B",
+        colorLight : "#FFFFFF",
+        correctLevel : QRCode.CorrectLevel.H
+      });
+    }
+
+    // Auto-init on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      const sel = document.getElementById('mobile-pilot-salon-select');
+      const initialSalonId = sel ? sel.value : 'salon_dz_1';
+      updateMobilePilotQR(initialSalonId);
+    });
+
+    function openAddSalonModal() {
+      document.getElementById('add-salon-modal').classList.remove('hidden');
+    }
+
+    function closeAddSalonModal() {
+      document.getElementById('add-salon-modal').classList.add('hidden');
+      document.getElementById('add-salon-form').reset();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('status-toast');
+      document.getElementById('status-toast-text').textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 5000);
+    }
+
+    async function submitNewSalon(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submit-salon-btn');
+      btn.disabled = true;
+      btn.textContent = 'جاري الإضافة...';
+
+      const payload = {
+        name: document.getElementById('new-salon-name').value,
+        barber_name: document.getElementById('new-barber-name').value,
+        phone: document.getElementById('new-salon-phone').value,
+        wilaya: document.getElementById('new-salon-wilaya').value,
+        commune: document.getElementById('new-salon-commune').value
+      };
+
+      try {
+        const res = await fetch('/api/salons/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeAddSalonModal();
+          showToast(data.message || 'تمت إضافة الصالون بنجاح!');
+          setTimeout(() => location.reload(), 800);
+        } else {
+          alert(data.error || 'حدث خطأ أثناء الإضافة');
+          btn.disabled = false;
+          btn.innerHTML = '<span>🚀</span> حفظ وإطلاق الصالون';
+        }
+      } catch (err) {
+        alert('تعذر الاتصال بالسيرفر');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🚀</span> حفظ وإطلاق الصالون';
+      }
+    }
+
+    function deleteSalonFromBtn(btn) {
+      const d = btn.dataset;
+      deleteSalon(d.id, d.name);
+    }
+
+    async function deleteSalon(salonId, salonName) {
+      if (!confirm(`هل أنت متأكد من حذف ${salonName}؟`)) return;
+      try {
+        const res = await fetch('/api/salons/' + salonId, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('تم حذف الصالون بنجاح');
+          const row = document.getElementById('salon-row-' + salonId);
+          if (row) row.remove();
+        } else {
+          alert(data.error || 'تعذر الحذف');
+        }
+      } catch (err) {
+        alert('تعذر الاتصال بالسيرفر');
+      }
+    }
+
+    // Modules Toggle Logic
+    function openModulesModalFromBtn(btn) {
+      const d = btn.dataset;
+      openModulesModal(d.id, d.name, parseInt(d.tv), parseInt(d.voice), parseInt(d.groom), parseInt(d.receipt));
+    }
+
+    function openModulesModal(salonId, salonName, tv, voice, groom, receipt) {
+      document.getElementById('modules-salon-id').value = salonId;
+      document.getElementById('modules-salon-title').textContent = `تفعيل الميزات: ${salonName}`;
+      document.getElementById('mod-toggle-tv').checked = !!tv;
+      document.getElementById('mod-toggle-voice').checked = !!voice;
+      document.getElementById('mod-toggle-groom').checked = !!groom;
+      document.getElementById('mod-toggle-receipt').checked = !!receipt;
+      document.getElementById('modules-modal').classList.remove('hidden');
+    }
+
+    function closeModulesModal() {
+      document.getElementById('modules-modal').classList.add('hidden');
+    }
+
+    async function submitModulesUpdate() {
+      const salonId = document.getElementById('modules-salon-id').value;
+      const payload = {
+        salon_id: salonId,
+        enable_tv_mode: document.getElementById('mod-toggle-tv').checked,
+        enable_voice_caller: document.getElementById('mod-toggle-voice').checked,
+        enable_groom_packs: document.getElementById('mod-toggle-groom').checked,
+        enable_receipt_print: document.getElementById('mod-toggle-receipt').checked
+      };
+
+      try {
+        const res = await fetch('/api/admin/salon/modules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeModulesModal();
+          showToast(data.message || 'تم تحديث الميزات بنجاح!');
+          setTimeout(() => location.reload(), 600);
+        } else {
+          alert(data.error || 'حدث خطأ أثناء التحديث');
+        }
+      } catch (e) {
+        alert('تعذر حفظ إعدادات الموديولات');
+      }
+    }
+
+    // Subscription Toggle & Extension Logic
+    async function toggleSubscription(salonId, action) {
+      const msg = action === 'suspend' 
+        ? 'هل أنت متأكد من تجميد حساب هذا الصالون فوراً؟ لن يتمكن من فتح شاشة الحلاق أو استقبال زبائن.' 
+        : 'هل تريد تفعيل حساب الصالون وتمديد الاشتراك 30 يوماً؟';
+      if (!confirm(msg)) return;
+      try {
+        const res = await fetch('/api/admin/salon/subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salon_id: salonId, action: action, extend_days: 30 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message);
+          setTimeout(() => location.reload(), 600);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (e) {
+        alert('تعذر الاتصال بالسيرفر');
+      }
+    }
+
+    // Master Admin Settings Modal Logic
+    function openAdminSettingsModal() {
+      document.getElementById('admin-settings-modal').classList.remove('hidden');
+    }
+    function closeAdminSettingsModal() {
+      document.getElementById('admin-settings-modal').classList.add('hidden');
+    }
+    async function saveAdminSettings() {
+      const pin = document.getElementById('setting-master-pin').value.trim();
+      const phone = document.getElementById('setting-admin-phone').value.trim();
+      const rip = document.getElementById('setting-admin-rip').value.trim();
+      if (!pin) {
+        alert('يرجى إدخال الرمز السري Master PIN');
+        return;
+      }
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ master_pin: pin, admin_phone: phone, admin_rip: rip })
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeAdminSettingsModal();
+          showToast(data.message);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (e) {
+        alert('تعذر الحفظ');
+      }
+    }
+
+    // Wholesale Orders and Status Update Logic
+    async function updateOrderStatus(orderId, newStatus) {
+      const confirmMsg = newStatus === 'shipped' 
+        ? 'هل تريد تأكيد شحن الطلبية وإرسالها للصالون؟' 
+        : newStatus === 'delivered' 
+          ? 'هل تم تسليم البضاعة وقبض كامل المبلغ؟ سيتم تسجيل الربح فوراً.' 
+          : 'هل تريد إلغاء هذه الطلبية؟';
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const res = await fetch('/api/admin/orders/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderId, status: newStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message);
+          setTimeout(() => location.reload(), 600);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (err) {
+        alert('تعذر الاتصال بالسيرفر');
+      }
+    }
+
+    function filterWholesaleOrders(status, btn) {
+      const buttons = document.querySelectorAll('.order-filter-btn');
+      buttons.forEach(b => {
+        b.className = 'order-filter-btn px-3 py-1 rounded-xl font-bold text-[11px] bg-zinc-100 text-zinc-700 hover:bg-zinc-200 transition';
+      });
+      btn.className = 'order-filter-btn px-3 py-1 rounded-xl font-bold text-[11px] bg-amber-500 text-slate-950 shadow transition';
+
+      const rows = document.querySelectorAll('.wholesale-order-row');
+      rows.forEach(r => {
+        if (status === 'all' || r.dataset.status === status) {
+          r.style.display = '';
+        } else {
+          r.style.display = 'none';
+        }
+      });
+    }
+
+    function openDeliverySlipModal(btn) {
+      const d = btn.dataset;
+      document.getElementById('slip-order-id').textContent = '#' + d.id;
+      document.getElementById('slip-date').textContent = 'التاريخ: ' + (d.date || new Date().toLocaleDateString('fr-FR'));
+      document.getElementById('slip-salon-name').textContent = d.salon;
+      document.getElementById('slip-barber-name').textContent = d.barber;
+      document.getElementById('slip-location').textContent = `${d.wilaya} - ${d.commune}`;
+      document.getElementById('slip-phone').textContent = d.phone || 'غير مسجل';
+      document.getElementById('slip-item-name').textContent = d.item;
+      document.getElementById('slip-unit').textContent = d.unit || '1 وحدة';
+      const priceVal = parseFloat(d.price) || 0;
+      document.getElementById('slip-price').textContent = priceVal.toLocaleString() + ' د.ج';
+      document.getElementById('slip-total-amount').textContent = priceVal.toLocaleString() + ' د.ج';
+      document.getElementById('delivery-slip-modal').classList.remove('hidden');
+    }
+
+    function closeDeliverySlipModal() {
+      document.getElementById('delivery-slip-modal').classList.add('hidden');
+    }
+
+    function printDeliverySlip() {
+      const printContent = document.getElementById('printable-delivery-slip').innerHTML;
+      const printWindow = window.open('', '', 'height=600,width=800');
+      printWindow.document.write('<!DOCTYPE html><html dir="rtl"><head><title>Bon de Livraison B2B - Dourak</title>');
+      printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">');
+      printWindow.document.write('<style>body{font-family:"Tajawal",sans-serif;padding:25px;direction:rtl;} table{width:100%;border-collapse:collapse;margin:15px 0;} th,td{border:1px solid #ccc;padding:10px;text-align:right;} th{background:#f3f4f6;}</style>');
+      printWindow.document.write('</head><body>');
+      printWindow.document.write(printContent);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 300);
+    }
+
+    function openProductCatalogModal() {
+      document.getElementById('product-catalog-modal').classList.remove('hidden');
+    }
+    function closeProductCatalogModal() {
+      document.getElementById('product-catalog-modal').classList.add('hidden');
+    }
+
+    async function saveProductUpdate(prodId) {
+      const price = document.getElementById('input-price-' + prodId).value;
+      const profit = document.getElementById('input-profit-' + prodId).value;
+      const stock = document.getElementById('input-stock-' + prodId).value;
+
+      try {
+        const res = await fetch('/api/admin/products/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_id: prodId,
+            price: parseFloat(price),
+            commission_or_profit: parseFloat(profit),
+            stock_count: parseInt(stock)
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message);
+        } else {
+          alert(data.error || 'حدث خطأ');
+        }
+      } catch (err) {
+        alert('تعذر الحفظ');
+      }
+    }
+
+    async function toggleFreelancerVerify(barberId) {
+      try {
+        const res = await fetch('/api/admin/freelancer/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barber_id: barberId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.is_verified ? "تم اعتماد الحلاق الحر بنجاح! ✔" : "تم إلغاء اعتماد الحلاق.");
+          setTimeout(() => window.location.reload(), 800);
+        } else {
+          alert("خطأ: " + (data.error || "فشلت العملية"));
+        }
+      } catch (err) {
+        alert("خطأ في الاتصال: " + err.message);
+      }
+    }
+
+    async function approveRecharge(rechargeId) {
+      if (!confirm("هل أنت متأكد من تأكيد استلام التحويل وإضافة الرصيد للحلاق؟")) return;
+      try {
+        const res = await fetch('/api/admin/recharge/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recharge_id: rechargeId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message);
+          setTimeout(() => window.location.reload(), 800);
+        } else {
+          alert("خطأ: " + (data.error || "فشلت العملية"));
+        }
+      } catch (err) {
+        alert("خطأ في الاتصال: " + err.message);
+      }
+    }
+
+    async function reviewKyc(barberId, action) {
+      const confirmMsg = (action === 'approve') 
+        ? 'هل أنت متأكد من اعتماد وتوثيق هذا الحلاق؟ سيتمكن من استقبال طلبات المنازل.'
+        : 'هل تريد رفض توثيق هذا الحلاق؟';
+      if (!confirm(confirmMsg)) return;
+
+      let reason = '';
+      if (action === 'reject') {
+        reason = prompt('سبب الرفض (اختياري):', 'الوثائق غير واضحة أو ناقصة');
+      }
+
+      try {
+        const res = await fetch('/api/admin/kyc/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barber_id: barberId, action: action, reason: reason })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message);
+          setTimeout(() => window.location.reload(), 700);
+        } else {
+          alert('خطأ: ' + (data.error || 'فشلت العملية'));
+        }
+      } catch (err) {
+        alert('خطأ في الاتصال: ' + err.message);
+      }
+    }
+
+    // Document & BaridiMob Receipt Preview Modal Logic
+    function previewDocImage(src, title) {
+      if (!src) {
+        alert('لا توجد صورة مرفقة لهذه الوثيقة.');
+        return;
+      }
+      const modal = document.getElementById('doc-preview-modal');
+      const img = document.getElementById('doc-preview-img');
+      const ttl = document.getElementById('doc-preview-title');
+      img.src = src;
+      ttl.textContent = title || 'معاينة الوثيقة أو الوصل';
+      modal.classList.remove('hidden');
+    }
+
+    function closeDocPreviewModal() {
+      const modal = document.getElementById('doc-preview-modal');
+      const img = document.getElementById('doc-preview-img');
+      if (img) img.src = '';
+      if (modal) modal.classList.add('hidden');
+    }
+
+    // Master Admin Logout Logic
+    async function logoutAdmin() {
+      if (!confirm('هل تريد تسجيل الخروج من لوحة التحكم؟')) return;
+      try {
+        await fetch('/api/admin/logout', { method: 'POST' });
+      } catch (e) {}
+      window.location.href = '/admin/login';
+    }
+  </script>
+
+  <!-- UNIVERSAL MODAL: DOCUMENT & SCREENSHOT PREVIEW -->
+  <div id="doc-preview-modal" class="fixed inset-0 z-50 bg-white backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-white border border-zinc-200 w-full max-w-xl rounded-xl p-5 shadow-2xl relative space-y-3">
+      <div class="flex items-center justify-between border-b border-zinc-200 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔍</span>
+          <h3 id="doc-preview-title" class="text-xs sm:text-sm font-bold text-zinc-950">معاينة الوثيقة</h3>
+        </div>
+        <button onclick="closeDocPreviewModal()" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-white flex items-center justify-center text-sm font-bold transition">
+          ✕
+        </button>
+      </div>
+
+      <div class="rounded-xl bg-zinc-50 border border-zinc-200 p-2 overflow-hidden flex items-center justify-center min-h-[260px] max-h-[70vh]">
+        <img id="doc-preview-img" src="" alt="معاينة" class="max-w-full max-h-[65vh] object-contain rounded-xl shadow-lg">
+      </div>
+
+      <div class="flex items-center justify-end">
+        <button onclick="closeDocPreviewModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold transition">
+          إغلاق المعاينة
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
