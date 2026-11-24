@@ -561,12 +561,13 @@ def fetch_salon_chairs_data(conn, salon_id):
         "chairs_count": len(chairs_data)
     }
 
+
 @app.route("/api/barber/chairs/<salon_id>", methods=["GET"])
 def get_salon_chairs(salon_id):
     conn = get_db_connection()
-    data = fetch_salon_chairs_data(conn, salon_id)
+    result = fetch_salon_chairs_data(conn, salon_id)
     conn.close()
-    return jsonify(data)
+    return jsonify(result)
 
 
 @app.route("/api/barber/chairs/add", methods=["POST"])
@@ -2082,7 +2083,6 @@ def create_home_service_request():
     created = conn.execute("SELECT * FROM home_service_requests WHERE id = ?", (req_id,)).fetchone()
     conn.close()
 
-    broadcaster.broadcast("home_request_created", {"request_id": req_id, "commune": commune, "service_type": service_type})
     created_dict = dict(created) if created else {}
     if created_dict.get("created_at"):
         created_dict["created_at"] = str(created_dict["created_at"])
@@ -2391,7 +2391,6 @@ def caisse_pos_dashboard(salon_id=None):
     products_rows = conn.execute("SELECT * FROM products WHERE type = 'b2c_hero'").fetchall()
     products_list = [dict(p) for p in products_rows]
 
-    chairs_result = fetch_salon_chairs_data(conn, salon_id)
     conn.close()
     if not salon:
         salon = all_salons_list[0] if all_salons_list else {"id": salon_id, "name": "صالون الأناقة الملكي", "barber_name": "المعلم رشيد", "wilaya": "الجزائر العاصمة (16)", "commune": "باب الزوار"}
@@ -2675,14 +2674,14 @@ def get_monthly_analytics(salon_id):
     # Daily aggregation
     daily_map = {}
     for t in tickets:
-        d = t["completed_at"][:10] if t["completed_at"] else date.today().strftime("%Y-%m-%d")
+        d = str(t["completed_at"])[:10] if t["completed_at"] else date.today().strftime("%Y-%m-%d")
         if d not in daily_map:
             daily_map[d] = {"date": d, "revenue": 0.0, "clients": 0, "expenses": 0.0}
         daily_map[d]["revenue"] += float(t["total_service_price"])
         daily_map[d]["clients"] += 1
 
     for e in expenses:
-        d = e["created_at"][:10] if e["created_at"] else date.today().strftime("%Y-%m-%d")
+        d = str(e["created_at"])[:10] if e["created_at"] else date.today().strftime("%Y-%m-%d")
         if d not in daily_map:
             daily_map[d] = {"date": d, "revenue": 0.0, "clients": 0, "expenses": 0.0}
         daily_map[d]["expenses"] += float(e["amount"])
@@ -2733,7 +2732,7 @@ def export_monthly_csv(salon_id):
     output.write("--- سجل الحلاقات المكتملة ---\n")
     output.write("التاريخ,الزبون,الهاتف,المبلغ (د.ج),الحلاق,طريقة الدفع\n")
     for t in tickets:
-        d = t["completed_at"][:19] if t["completed_at"] else ""
+        d = str(t["completed_at"])[:19] if t["completed_at"] else ""
         c_name = (t["customer_name"] or "").replace(",", " ")
         c_phone = (t["customer_phone"] or "").replace(",", " ")
         price = t["total_service_price"]
@@ -2744,7 +2743,7 @@ def export_monthly_csv(salon_id):
     output.write("\n--- سجل مصاريف الصندوق (Sorties de Caisse) ---\n")
     output.write("التاريخ,النوع,البيان,المبلغ (د.ج)\n")
     for e in expenses:
-        d = e["created_at"][:19] if e["created_at"] else ""
+        d = str(e["created_at"])[:19] if e["created_at"] else ""
         cat = (e["category"] or "").replace(",", " ")
         desc = (e["description"] or "").replace(",", " ")
         amt = e["amount"]
@@ -2847,7 +2846,7 @@ def admin_login_api():
     pin_row = conn.execute("SELECT value FROM admin_settings WHERE key = 'master_pin'").fetchone()
     conn.close()
 
-    master_pin = pin_row["value"] if pin_row else "2026"
+    master_pin = os.environ.get('ADMIN_PIN') or (pin_row["value"] if pin_row else "2026")
     if pin == master_pin:
         resp = jsonify({"success": True, "message": "تم تسجيل الدخول بنجاح!"})
         resp.set_cookie("admin_auth_token", "master_admin_session_valid", max_age=30*86400, httponly=True)
@@ -3240,7 +3239,8 @@ def admin_platform():
         home_requests=home_requests_list,
         recharges=recharges_list,
         kyc_requests=kyc_list,
-        local_ip=get_local_ip()
+        local_ip=get_local_ip(),
+        base_url=request.url_root.rstrip('/')
     )
 
 
