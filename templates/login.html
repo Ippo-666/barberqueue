@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تسجيل الدخول - دورك BarberQueue</title>
+  
+  <!-- PWA & Mobile Web App Meta -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="BarberQueue">
+  <meta name="theme-color" content="#FFFFFF">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-tap-highlight-color: transparent; }
+    .custom-scroll::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-[#FAFAFA] text-zinc-950 min-h-screen antialiased flex flex-col justify-between pb-24">
+
+  <!-- HEADER (56px) -->
+  <header class="w-full bg-white border-b border-zinc-200 h-14 px-4 sticky top-0 z-30 flex items-center justify-between">
+    <a href="/portal" class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center text-white text-sm font-bold">
+        د
+      </div>
+      <div>
+        <h1 class="text-sm font-bold text-zinc-950 leading-tight">دورك BarberQueue</h1>
+        <p class="text-[10px] text-zinc-500">بوابة الحسابات والشركاء</p>
+      </div>
+    </a>
+    <a href="/portal" class="text-xs text-zinc-600 hover:text-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-200 bg-white transition">
+      الرئيسية
+    </a>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="w-full max-w-md mx-auto p-4 my-auto">
+    <div class="bg-white border border-zinc-200 rounded-xl p-5 sm:p-6 space-y-4 shadow-sm">
+
+      <!-- Unauthorized Warning if redirected -->
+      {% if error == 'unauthorized' %}
+      <div class="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium text-center">
+        هذا المسار محمي بكلمة سر، يرجى تسجيل الدخول للمتابعة
+      </div>
+      {% endif %}
+
+      <!-- Heading -->
+      <div class="text-center space-y-1">
+        <h2 id="page-title" class="text-lg sm:text-xl font-bold text-zinc-950">تسجيل الدخول والتسجيل</h2>
+        <p id="page-subtitle" class="text-xs text-zinc-500">اختر نوع الحساب لإدارة الحجوزات والزبائن</p>
+      </div>
+
+      <!-- MAIN ROLE TABS -->
+      <div class="grid grid-cols-2 gap-1 p-1 rounded-lg bg-zinc-100 text-xs font-medium">
+        <button id="tab-salon" onclick="switchRole('salon')" class="py-2 rounded-md transition text-zinc-950 bg-white shadow-sm font-semibold">
+          صالون حلاقة
+        </button>
+        <button id="tab-freelance" onclick="switchRole('freelance')" class="py-2 rounded-md transition text-zinc-600 hover:text-zinc-950">
+          حلاق متنقل (للدار)
+        </button>
+      </div>
+
+      <!-- ERROR ALERT -->
+      <div id="login-error-alert" class="hidden p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium text-center"></div>
+
+      <!-- SUCCESS ALERT -->
+      <div id="login-success-alert" class="hidden p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium text-center"></div>
+
+      <!-- TAB 1: SALON -->
+      <div id="form-salon" class="space-y-4">
+        
+        <!-- Salon Sub-Mode Switcher -->
+        <div class="flex items-center justify-center gap-1 p-1 bg-zinc-100 rounded-lg text-xs font-medium">
+          <button id="sub-salon-login" onclick="switchSalonMode('login')" class="flex-1 py-1.5 rounded-md bg-white text-zinc-950 transition font-semibold shadow-sm">
+            تسجيل الدخول
+          </button>
+          <button id="sub-salon-register" onclick="switchSalonMode('register')" class="flex-1 py-1.5 rounded-md text-zinc-600 hover:text-zinc-950 transition">
+            تسجيل صالون جديد
+          </button>
+        </div>
+
+        <!-- 1.A: SALON LOGIN (Phone + PIN Only) -->
+        <div id="salon-login-box" class="space-y-3.5">
+          <div>
+            <label class="block text-xs font-medium text-zinc-700 mb-1">رقم هاتف الصالون:</label>
+            <input type="tel" id="salon-login-phone" placeholder="05 / 06 / 07..." value="" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-zinc-700 mb-1">رمز PIN السري (4 أرقام):</label>
+            <input type="password" id="salon-pin" maxlength="6" placeholder="••••" value="" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-sm text-center tracking-widest text-zinc-900 outline-none transition">
+          </div>
+
+          <button onclick="submitSalonLogin()" id="btn-salon-login" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs rounded-lg transition">
+            دخول فضاء الحلاق وإدارة الصالون
+          </button>
+
+          <!-- Switch to register prompt -->
+          <div class="text-center pt-2">
+            <button type="button" onclick="switchSalonMode('register')" class="text-xs text-zinc-600 hover:text-zinc-950 transition">
+              ليس لديك حساب صالون؟ اضغط هنا لتسجيل صالون جديد
+            </button>
+          </div>
+        </div>
+
+        <!-- 1.B: SALON REGISTRATION -->
+        <div id="salon-register-box" class="space-y-3 hidden">
+          <div class="bg-zinc-50 border border-zinc-200 p-2.5 rounded-lg text-[11px] text-zinc-600">
+            سجّل صالونك في المنصة للبدء في تنظيم الطابور واستقبال الزبائن
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-zinc-700 mb-1">اسم الصالون *:</label>
+            <input type="text" id="reg-name" placeholder="مثال: صالون الأناقة الملكي" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-zinc-700 mb-1">اسم صاحب الصالون أو الحلاق المسؤول *:</label>
+            <input type="text" id="reg-barber" placeholder="مثال: كريم بلقاسم" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-zinc-700 mb-1">رقم الهاتف * (يستخدم لتسجيل الدخول):</label>
+            <input type="tel" id="reg-phone" placeholder="05 / 06 / 07..." class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-zinc-700 mb-1">الولاية *:</label>
+              <select id="reg-wilaya" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+                <option value="الجزائر العاصمة (16)">16 - الجزائر العاصمة</option>
+                <option value="وهران (31)">31 - وهران</option>
+                <option value="قسنطينة (25)">25 - قسنطينة</option>
+                <option value="سطيف (19)">19 - سطيف</option>
+                <option value="البليدة (09)">09 - البليدة</option>
+                <option value="بجاية (06)">06 - بجاية</option>
+                <option value="تيزي وزو (15)">15 - تيزي وزو</option>
+                <option value="عنابة (23)">23 - عنابة</option>
+                <option value="باتنة (05)">05 - باتنة</option>
+                <option value="تلمسان (13)">13 - تلمسان</option>
+                <option value="بومرداس (35)">35 - بومرداس</option>
+                <option value="تيبازة (42)">42 - تيبازة</option>
+                <option value="الشلف (02)">02 - الشلف</option>
+                <option value="بسكرة (07)">07 - بسكرة</option>
+                <option value="جيجل (18)">18 - جيجل</option>
+                <option value="سكيكدة (21)">21 - سكيكدة</option>
+                <option value="مستغانم (27)">27 - مستغانم</option>
+                <option value="المسيلة (28)">28 - المسيلة</option>
+                <option value="معسكر (29)">29 - معسكر</option>
+                <option value="ورقلة (30)">30 - ورقلة</option>
+                <option value="البرج (34)">34 - برج بوعريريج</option>
+                <option value="الوادي (39)">39 - الوادي</option>
+                <option value="غليزان (48)">48 - غليزان</option>
+                <option value="ولاية أخرى">ولاية أخرى...</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-zinc-700 mb-1">البلدية / الحي:</label>
+              <input type="text" id="reg-commune" placeholder="مثال: باب الزوار" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-zinc-700 mb-1">عدد كراسي الحلاقة:</label>
+              <select id="reg-chairs" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+                <option value="1">كرسي واحد (1)</option>
+                <option value="2" selected>كرسيين (2)</option>
+                <option value="3">3 كراسي</option>
+                <option value="4">4 كراسي أو أكثر</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-zinc-700 mb-1">رمز PIN السري للدخول:</label>
+              <input type="password" id="reg-pin" maxlength="6" value="" placeholder="1234" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-sm text-center tracking-widest text-zinc-900 outline-none transition">
+            </div>
+          </div>
+
+          <button onclick="submitSalonRegister()" id="btn-salon-register" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs rounded-lg transition">
+            إنشاء حساب الصالون والبدء
+          </button>
+
+          <div class="text-center pt-1">
+            <button type="button" onclick="switchSalonMode('login')" class="text-xs text-zinc-600 hover:text-zinc-950 transition">
+              لديك حساب بالفعل؟ تسجيل الدخول
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: FREELANCE BARBER LOGIN -->
+      <div id="form-freelance" class="space-y-4 hidden">
+        <div>
+          <label class="block text-xs font-medium text-zinc-700 mb-1">رقم الهاتف:</label>
+          <input type="tel" id="free-phone" placeholder="05 / 06 / 07..." value="" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-xs text-zinc-900 outline-none transition">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-zinc-700 mb-1">رمز PIN السري (4 أرقام):</label>
+          <input type="password" id="free-pin" maxlength="6" placeholder="••••" value="" class="w-full bg-white border border-zinc-300 focus:border-zinc-900 rounded-lg px-3 py-2 text-sm text-center tracking-widest text-zinc-900 outline-none transition">
+        </div>
+
+        <button onclick="submitFreelanceLogin()" id="btn-free-login" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs rounded-lg transition">
+          دخول لوحة الحلاق المتنقل
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- NATIVE CLIENT BOTTOM NAVIGATION BAR (4 TABS) -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-zinc-200 px-4 py-2 flex items-center justify-around max-w-lg mx-auto shadow-sm">
+    <a href="/portal" class="flex flex-col items-center gap-0.5 text-zinc-500 hover:text-zinc-900 font-medium transition text-[11px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      <span>الرئيسية</span>
+    </a>
+    <a href="/explore" class="flex flex-col items-center gap-0.5 text-zinc-500 hover:text-zinc-900 font-medium transition text-[11px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+      <span>الصالونات</span>
+    </a>
+    <a href="/freelance/request" class="flex flex-col items-center gap-0.5 text-zinc-500 hover:text-zinc-900 font-medium transition text-[11px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span>حلاق للدار</span>
+    </a>
+    <a href="/login" class="flex flex-col items-center gap-0.5 text-zinc-900 font-semibold transition text-[11px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      <span>حسابي</span>
+    </a>
+  </nav>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentRole = urlParams.get('role') || 'salon';
+    let salonMode = urlParams.get('mode') || 'login';
+    const targetUrl = '{{ target }}' || urlParams.get('target') || '';
+
+    function switchRole(role) {
+      currentRole = role;
+      document.getElementById('login-error-alert').classList.add('hidden');
+      document.getElementById('login-success-alert').classList.add('hidden');
+
+      ['salon', 'freelance'].forEach(r => {
+        const tab = document.getElementById('tab-' + r);
+        const form = document.getElementById('form-' + r);
+        if (r === role) {
+          form.classList.remove('hidden');
+          tab.className = 'py-2 rounded-md transition text-zinc-950 bg-white shadow-sm font-semibold';
+        } else {
+          form.classList.add('hidden');
+          tab.className = 'py-2 rounded-md transition text-zinc-600 hover:text-zinc-950 font-medium';
+        }
+      });
+    }
+
+    function switchSalonMode(mode) {
+      salonMode = mode;
+      document.getElementById('login-error-alert').classList.add('hidden');
+      document.getElementById('login-success-alert').classList.add('hidden');
+
+      const loginBox = document.getElementById('salon-login-box');
+      const regBox = document.getElementById('salon-register-box');
+      const subLogin = document.getElementById('sub-salon-login');
+      const subReg = document.getElementById('sub-salon-register');
+
+      if (mode === 'register') {
+        loginBox.classList.add('hidden');
+        regBox.classList.remove('hidden');
+        subReg.className = 'flex-1 py-1.5 rounded-md bg-white text-zinc-950 transition font-semibold shadow-sm';
+        subLogin.className = 'flex-1 py-1.5 rounded-md text-zinc-600 hover:text-zinc-950 transition font-medium';
+      } else {
+        regBox.classList.add('hidden');
+        loginBox.classList.remove('hidden');
+        subLogin.className = 'flex-1 py-1.5 rounded-md bg-white text-zinc-950 transition font-semibold shadow-sm';
+        subReg.className = 'flex-1 py-1.5 rounded-md text-zinc-600 hover:text-zinc-950 transition font-medium';
+      }
+    }
+
+    function showError(msg) {
+      const alertBox = document.getElementById('login-error-alert');
+      alertBox.textContent = msg;
+      alertBox.classList.remove('hidden');
+      document.getElementById('login-success-alert').classList.add('hidden');
+    }
+
+    function showSuccess(msg) {
+      const alertBox = document.getElementById('login-success-alert');
+      alertBox.textContent = msg;
+      alertBox.classList.remove('hidden');
+      document.getElementById('login-error-alert').classList.add('hidden');
+    }
+
+    async function submitSalonLogin() {
+      const phone = document.getElementById('salon-login-phone').value.trim();
+      const pin = document.getElementById('salon-pin').value.trim();
+      const btn = document.getElementById('btn-salon-login');
+
+      if (!phone) {
+        return showError('يرجى إدخال رقم هاتف الصالون');
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = 'جاري التحقق...';
+
+      try {
+        const res = await fetch('/api/salon/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phone, pin_code: pin })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = targetUrl || data.redirect || ('/barber/' + data.salon_id);
+        } else {
+          showError(data.error || 'فشل تسجيل الدخول');
+          btn.disabled = false;
+          btn.innerHTML = 'دخول فضاء الحلاق وإدارة الصالون';
+        }
+      } catch (err) {
+        showError('تعذر الاتصال بالسيرفر');
+        btn.disabled = false;
+        btn.innerHTML = 'دخول فضاء الحلاق وإدارة الصالون';
+      }
+    }
+
+    async function submitSalonRegister() {
+      const name = document.getElementById('reg-name').value.trim();
+      const barber = document.getElementById('reg-barber').value.trim();
+      const phone = document.getElementById('reg-phone').value.trim();
+      const wilaya = document.getElementById('reg-wilaya').value;
+      const commune = document.getElementById('reg-commune').value.trim();
+      const chairs = document.getElementById('reg-chairs').value;
+      const pin = document.getElementById('reg-pin').value.trim();
+      const btn = document.getElementById('btn-salon-register');
+
+      if (!name) return showError('يرجى إدخال اسم الصالون');
+      if (!barber) return showError('يرجى إدخال اسم صاحب الصالون أو الحلاق المسؤول');
+      if (!phone || phone.length < 9) return showError('يرجى إدخال رقم هاتف صحيح');
+
+      btn.disabled = true;
+      btn.innerHTML = 'جاري إنشاء حساب الصالون...';
+
+      try {
+        const res = await fetch('/api/salon/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            barber_name: barber,
+            phone: phone,
+            wilaya: wilaya,
+            commune: commune,
+            chairs_count: parseInt(chairs) || 1,
+            pin_code: pin || '1234'
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showSuccess(data.message || 'تم تسجيل الصالون بنجاح!');
+          setTimeout(() => {
+            window.location.href = data.redirect || ('/barber/' + data.salon_id);
+          }, 700);
+        } else {
+          showError(data.error || 'فشل تسجيل الصالون');
+          btn.disabled = false;
+          btn.innerHTML = 'إنشاء حساب الصالون والبدء';
+        }
+      } catch (err) {
+        showError('تعذر الاتصال بالسيرفر');
+        btn.disabled = false;
+        btn.innerHTML = 'إنشاء حساب الصالون والبدء';
+      }
+    }
+
+    async function submitFreelanceLogin() {
+      const phone = document.getElementById('free-phone').value.trim();
+      const pin = document.getElementById('free-pin').value.trim();
+      const btn = document.getElementById('btn-free-login');
+
+      if (!phone) return showError('يرجى إدخال رقم الهاتف');
+      btn.disabled = true;
+      btn.innerHTML = 'جاري تسجيل الدخول...';
+
+      try {
+        const res = await fetch('/api/freelance/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phone, pin_code: pin })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = targetUrl ? ('/freelance/' + targetUrl) : (data.redirect || '/freelance/' + data.barber.id);
+        } else {
+          showError(data.error || 'فشل تسجيل الدخول');
+          btn.disabled = false;
+          btn.innerHTML = 'دخول لوحة الحلاق المتنقل';
+        }
+      } catch (err) {
+        showError('تعذر الاتصال بالسيرفر');
+        btn.disabled = false;
+        btn.innerHTML = 'دخول لوحة الحلاق المتنقل';
+      }
+    }
+
+    // Auto initialize based on URL params
+    switchRole(currentRole);
+    if (salonMode === 'register') {
+      switchSalonMode('register');
+    }
+
+    window.DorekLifecycle = {
+      pause: function() { console.log('[DorekLifecycle] Login Paused'); },
+      resume: function() { console.log('[DorekLifecycle] Login Resumed'); }
+    };
+  </script>
+
+  <script>
+    (function() {
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function() {
+          var nav = document.querySelector('nav.fixed.bottom-0');
+          if (nav) {
+            if (window.visualViewport.height < window.innerHeight * 0.78) {
+              nav.classList.add('hidden');
+            } else {
+              nav.classList.remove('hidden');
+            }
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+            </html>
