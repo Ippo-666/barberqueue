@@ -270,6 +270,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0F19))
+      ..setUserAgent('BarberQueueNativeApp/1.0.0')
+      
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -289,7 +291,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
               (function() {
                 var webNav = document.querySelector('nav.fixed.bottom-0');
                 if (webNav) webNav.style.display = 'none';
-                document.body.style.paddingBottom = '8px';
+                var pwaBanner = document.getElementById('pwa-install-banner');
+                if (pwaBanner) pwaBanner.style.display = 'none';
+                document.body.style.paddingBottom = '0px';
               })();
             """);
           },
