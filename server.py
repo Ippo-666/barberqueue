@@ -73,6 +73,31 @@ def clean_for_json(obj):
         return [clean_for_json(x) for x in obj]
     return obj
 
+def safe_json_loads(val, default=None):
+    """Safely parse JSON string, returning default if null/empty/invalid, avoiding 500 errors."""
+    if default is None:
+        default = []
+    if not val:
+        return default
+    if isinstance(val, (dict, list)):
+        return val
+    try:
+        return json.loads(val)
+    except Exception:
+        return default
+
+def safe_get(row, key, default=None):
+    """Safely get value from dict, sqlite3.Row or RealDictRow without throwing AttributeError or KeyError."""
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        val = row[key]
+        return val if val is not None else default
+    except (KeyError, IndexError, TypeError):
+        return default
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
 if BASE_DIR not in sys.path:
@@ -94,6 +119,11 @@ app.jinja_env.auto_reload = True
 def add_performance_headers(response):
     if request.path.startswith('/static/'):
         response.headers['Cache-Control'] = 'public, max-age=86400'
+    else:
+        # Enforce no-cache on all HTML and API endpoints so phones always get fresh data
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '-1'
     return response
 
 @app.before_request
@@ -204,8 +234,8 @@ def get_queue(salon_id):
         ).fetchone()
         if in_chair_row:
             in_chair = dict(in_chair_row)
-            in_chair["services"] = json.loads(in_chair["services_json"])
-            in_chair["ordered_products"] = json.loads(in_chair["ordered_products_json"]) if in_chair["ordered_products_json"] else []
+            in_chair["services"] = safe_json_loads(in_chair.get("services_json"))
+            in_chair["ordered_products"] = safe_json_loads(in_chair.get("ordered_products_json"))
 
     # Waiting tickets ordered by joined_at
     waiting_rows = conn.execute("""
@@ -218,8 +248,8 @@ def get_queue(salon_id):
     accumulated_wait = in_chair["total_duration"] if in_chair else 0
     for row in waiting_rows:
         item = dict(row)
-        item["services"] = json.loads(item["services_json"])
-        item["ordered_products"] = json.loads(item["ordered_products_json"]) if item["ordered_products_json"] else []
+        item["services"] = safe_json_loads(item.get("services_json"))
+        item["ordered_products"] = safe_json_loads(item.get("ordered_products_json"))
         item["calculated_wait_minutes"] = accumulated_wait
         accumulated_wait += item["total_duration"]
 
@@ -346,8 +376,8 @@ def get_ticket(ticket_id):
     conn.close()
 
     res = dict(ticket)
-    res["services"] = json.loads(ticket["services_json"]) if ticket["services_json"] else []
-    res["ordered_products"] = json.loads(ticket["ordered_products_json"]) if ticket["ordered_products_json"] else []
+    res["services"] = safe_json_loads(res.get("services_json"))
+    res["ordered_products"] = safe_json_loads(res.get("ordered_products_json"))
     res["position"] = position
     res["calculated_wait_minutes"] = calculated_wait
     return jsonify(res)
@@ -584,8 +614,8 @@ def fetch_salon_chairs_data(conn, salon_id):
                 t_row = conn.execute("SELECT * FROM queue_tickets WHERE id = ?", (chair["current_ticket_id"],)).fetchone()
                 if t_row and t_row["status"] == "in_chair":
                     current_client = dict(t_row)
-                    current_client["services"] = json.loads(current_client["services_json"]) if current_client.get("services_json") else []
-                    current_client["ordered_products"] = json.loads(current_client["ordered_products_json"]) if current_client.get("ordered_products_json") else []
+                    current_client["services"] = safe_json_loads(current_client.get("services_json"))
+                    current_client["ordered_products"] = safe_json_loads(current_client.get("ordered_products_json"))
                     l_row = conn.execute("SELECT visits_count FROM customer_loyalty WHERE phone = ?", (current_client.get("customer_phone"),)).fetchone()
                     current_client["loyalty_visits"] = l_row["visits_count"] if l_row else 1
                 else:
@@ -2339,13 +2369,7 @@ def marketplace_home():
 
             # Parse Amenities
             amenities_raw = s_dict.get('amenities')
-            if amenities_raw:
-                try:
-                    s_dict['amenities_list'] = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
-                except Exception:
-                    s_dict['amenities_list'] = ['clima', 'baridimob', 'coffee', 'parking', 'sanitized']
-            else:
-                s_dict['amenities_list'] = ['clima', 'baridimob', 'coffee', 'parking', 'sanitized']
+            s_dict['amenities_list'] = safe_json_loads(amenities_raw, default=['clima', 'baridimob', 'coffee', 'parking', 'sanitized'])
 
             # Google Maps search URL
             maps_target = s_dict.get('maps_query') or f"{s_dict.get('name', '')} {s_dict.get('commune', '')} {s_dict.get('wilaya', '')}"
