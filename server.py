@@ -771,11 +771,16 @@ def chair_call_next():
     ticket_id = data.get("ticket_id")
 
     conn = get_db_connection()
-    chair = conn.execute("SELECT * FROM salon_chairs WHERE id = ?", (chair_id,)).fetchone()
+    chair_num_val = int(chair_id) if str(chair_id).isdigit() else -1
+    chair = conn.execute("""
+        SELECT * FROM salon_chairs 
+        WHERE id = ? OR (salon_id = ? AND chair_number = ?)
+    """, (str(chair_id), salon_id, chair_num_val)).fetchone()
     if not chair:
         conn.close()
         return jsonify({"error": "الكرسي غير موجود"}), 404
 
+    actual_chair_id = chair["id"]
     chair_num = chair["chair_number"]
 
     # 1. Complete previous client in this chair if any
@@ -791,7 +796,7 @@ def chair_call_next():
                 INSERT INTO customer_loyalty (phone, customer_name, visits_count, last_visit_at)
                 VALUES (?, ?, 1, CURRENT_TIMESTAMP)
                 ON CONFLICT(phone) DO UPDATE SET
-                    visits_count = visits_count + 1,
+                    visits_count = customer_loyalty.visits_count + 1,
                     last_visit_at = CURRENT_TIMESTAMP
             """, (prev_t["customer_phone"], prev_t["customer_name"]))
 
@@ -842,15 +847,15 @@ def chair_call_next():
         WHERE id = ?
     """, (chair_num, started_at_str, est_end_str, next_id))
 
-    conn.execute("UPDATE salon_chairs SET current_ticket_id = ? WHERE id = ?", (next_id, chair_id))
+    conn.execute("UPDATE salon_chairs SET current_ticket_id = ? WHERE id = ?", (next_id, actual_chair_id))
     if chair_num == 1:
         conn.execute("UPDATE salons SET current_in_chair_id = ? WHERE id = ?", (next_id, salon_id))
 
     conn.commit()
     conn.close()
 
-    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": chair_id, "ticket_id": next_id})
-    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": chair_id, "ticket_id": next_id})
+    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": actual_chair_id, "ticket_id": next_id})
+    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": actual_chair_id, "ticket_id": next_id})
     broadcaster.broadcast("turn_alert", {"salon_id": salon_id, "ticket_id": next_id, "chair_number": chair_num, "barber_name": chair["barber_name"]})
 
     return jsonify({
@@ -871,24 +876,29 @@ def chair_cancel_session():
     chair_id = data.get("chair_id")
 
     conn = get_db_connection()
-    chair = conn.execute("SELECT * FROM salon_chairs WHERE id = ?", (chair_id,)).fetchone()
+    chair_num_val = int(chair_id) if str(chair_id).isdigit() else -1
+    chair = conn.execute("""
+        SELECT * FROM salon_chairs 
+        WHERE id = ? OR (salon_id = ? AND chair_number = ?)
+    """, (str(chair_id), salon_id, chair_num_val)).fetchone()
     if not chair:
         conn.close()
         return jsonify({"error": "الكرسي غير موجود"}), 404
 
+    actual_chair_id = chair["id"]
     ticket_id = chair["current_ticket_id"]
     if ticket_id:
         conn.execute("UPDATE queue_tickets SET status = 'cancelled' WHERE id = ?", (ticket_id,))
 
-    conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair_id,))
+    conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (actual_chair_id,))
     if chair["chair_number"] == 1:
         conn.execute("UPDATE salons SET current_in_chair_id = NULL WHERE id = ?", (salon_id,))
 
     conn.commit()
     conn.close()
 
-    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "cancel_session", "chair_id": chair_id})
-    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "cancel_session", "chair_id": chair_id})
+    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "cancel_session", "chair_id": actual_chair_id})
+    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "cancel_session", "chair_id": actual_chair_id})
     return jsonify({"success": True, "message": "تم إلغاء الجلسة وإخلاء الكرسي"})
 
 
@@ -899,11 +909,16 @@ def chair_complete_service():
     chair_id = data.get("chair_id")
 
     conn = get_db_connection()
-    chair = conn.execute("SELECT * FROM salon_chairs WHERE id = ?", (chair_id,)).fetchone()
+    chair_num_val = int(chair_id) if str(chair_id).isdigit() else -1
+    chair = conn.execute("""
+        SELECT * FROM salon_chairs 
+        WHERE id = ? OR (salon_id = ? AND chair_number = ?)
+    """, (str(chair_id), salon_id, chair_num_val)).fetchone()
     if not chair:
         conn.close()
         return jsonify({"error": "الكرسي غير موجود"}), 404
 
+    actual_chair_id = chair["id"]
     ticket_id = chair["current_ticket_id"]
     if ticket_id:
         conn.execute("""
@@ -917,19 +932,19 @@ def chair_complete_service():
                 INSERT INTO customer_loyalty (phone, customer_name, visits_count, last_visit_at)
                 VALUES (?, ?, 1, CURRENT_TIMESTAMP)
                 ON CONFLICT(phone) DO UPDATE SET
-                    visits_count = visits_count + 1,
+                    visits_count = customer_loyalty.visits_count + 1,
                     last_visit_at = CURRENT_TIMESTAMP
             """, (prev_t["customer_phone"], prev_t["customer_name"]))
 
-    conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair_id,))
+    conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (actual_chair_id,))
     if chair["chair_number"] == 1:
         conn.execute("UPDATE salons SET current_in_chair_id = NULL WHERE id = ?", (salon_id,))
 
     conn.commit()
     conn.close()
 
-    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "complete", "chair_id": chair_id})
-    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "complete", "chair_id": chair_id})
+    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "complete", "chair_id": actual_chair_id})
+    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "complete", "chair_id": actual_chair_id})
     return jsonify({"success": True, "message": "تم إنهاء الحلاقة بنجاح!"})
 
 
