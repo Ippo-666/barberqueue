@@ -514,6 +514,9 @@ def init_db():
         estimated_arrival_minutes INTEGER,
         ordered_products_json TEXT, -- JSON list of products added
         preferred_chair_id INTEGER DEFAULT 0,
+        chair_id INTEGER DEFAULT 1,
+        started_at TIMESTAMP,
+        estimated_end_time TIMESTAMP,
         preferred_barber_name TEXT DEFAULT 'أي حلاق متاح',
         hair_style_note TEXT DEFAULT '',
         payment_method TEXT DEFAULT 'cash',
@@ -770,6 +773,15 @@ def init_db():
     rech_cols = [r[1] for r in cursor.fetchall()]
     if "receipt_image" not in rech_cols:
         cursor.execute("ALTER TABLE freelancer_wallet_recharges ADD COLUMN receipt_image TEXT DEFAULT ''")
+
+    cursor.execute("PRAGMA table_info(queue_tickets)")
+    ticket_cols = [r[1] for r in cursor.fetchall()]
+    if "chair_id" not in ticket_cols:
+        cursor.execute("ALTER TABLE queue_tickets ADD COLUMN chair_id INTEGER DEFAULT 1")
+    if "started_at" not in ticket_cols:
+        cursor.execute("ALTER TABLE queue_tickets ADD COLUMN started_at TIMESTAMP")
+    if "estimated_end_time" not in ticket_cols:
+        cursor.execute("ALTER TABLE queue_tickets ADD COLUMN estimated_end_time TIMESTAMP")
 
     cursor.execute("PRAGMA table_info(salons)")
     salon_cols = [r[1] for r in cursor.fetchall()]

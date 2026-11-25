@@ -551,19 +551,43 @@ def call_next():
         ORDER BY joined_at ASC LIMIT 1
     """, (salon_id,)).fetchone()
 
-    next_id = None
-    if next_client:
-        next_id = next_client["id"]
-        conn.execute("UPDATE queue_tickets SET status = 'in_chair' WHERE id = ?", (next_id,))
-        conn.execute("UPDATE salons SET current_in_chair_id = ? WHERE id = ?", (next_id, salon_id))
-    else:
+    if not next_client:
         conn.execute("UPDATE salons SET current_in_chair_id = NULL WHERE id = ?", (salon_id,))
+        conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE salon_id = ? AND chair_number = 1", (salon_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "لا يوجد زبائن في قائمة الانتظار لإدخالهم للكرسي حالياً"}), 400
+
+    next_id = next_client["id"]
+    duration = int(next_client["total_duration"] or 25)
+    now_dt = datetime.now()
+    started_at_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    est_end_str = (now_dt + timedelta(minutes=duration)).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn.execute("""
+        UPDATE queue_tickets 
+        SET status = 'in_chair', 
+            chair_id = 1, 
+            started_at = ?, 
+            estimated_end_time = ? 
+        WHERE id = ?
+    """, (started_at_str, est_end_str, next_id))
+    conn.execute("UPDATE salons SET current_in_chair_id = ? WHERE id = ?", (next_id, salon_id))
+    conn.execute("UPDATE salon_chairs SET current_ticket_id = ? WHERE salon_id = ? AND chair_number = 1", (next_id, salon_id))
 
     conn.commit()
     conn.close()
 
     broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "next", "in_chair_id": next_id})
-    return jsonify({"success": True, "in_chair_id": next_id})
+    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": f"chair_{salon_id}_1", "ticket_id": next_id})
+    return jsonify({
+        "success": True, 
+        "in_chair_id": next_id,
+        "customer_name": next_client["customer_name"],
+        "started_at": started_at_str,
+        "estimated_end_time": est_end_str,
+        "total_duration": duration
+    })
 
 
 # -------------------------------------------------------------
@@ -618,6 +642,31 @@ def fetch_salon_chairs_data(conn, salon_id):
                     current_client["ordered_products"] = safe_json_loads(current_client.get("ordered_products_json"))
                     l_row = conn.execute("SELECT visits_count FROM customer_loyalty WHERE phone = ?", (current_client.get("customer_phone"),)).fetchone()
                     current_client["loyalty_visits"] = l_row["visits_count"] if l_row else 1
+
+                    # Compute or guarantee started_at and estimated_end_time
+                    duration = int(current_client.get("total_duration") or 25)
+                    started = current_client.get("started_at")
+                    if not started:
+                        started = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        current_client["started_at"] = started
+                        try:
+                            conn.execute("UPDATE queue_tickets SET started_at = ? WHERE id = ?", (started, current_client["id"]))
+                            conn.commit()
+                        except Exception:
+                            pass
+
+                    if not current_client.get("estimated_end_time"):
+                        try:
+                            s_dt = datetime.strptime(str(started).split('.')[0], "%Y-%m-%d %H:%M:%S")
+                        except Exception:
+                            s_dt = datetime.now()
+                        est_end = (s_dt + timedelta(minutes=duration)).strftime("%Y-%m-%d %H:%M:%S")
+                        current_client["estimated_end_time"] = est_end
+                        try:
+                            conn.execute("UPDATE queue_tickets SET estimated_end_time = ? WHERE id = ?", (est_end, current_client["id"]))
+                            conn.commit()
+                        except Exception:
+                            pass
                 else:
                     conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair["id"],))
                     conn.commit()
@@ -719,6 +768,7 @@ def chair_call_next():
     data = request.json or {}
     salon_id = data.get("salon_id", "salon_dz_1")
     chair_id = data.get("chair_id")
+    ticket_id = data.get("ticket_id")
 
     conn = get_db_connection()
     chair = conn.execute("SELECT * FROM salon_chairs WHERE id = ?", (chair_id,)).fetchone()
@@ -745,36 +795,101 @@ def chair_call_next():
                     last_visit_at = CURRENT_TIMESTAMP
             """, (prev_t["customer_phone"], prev_t["customer_name"]))
 
-    # 2. Pick next waiting client (respecting preferred barber/chair if chosen)
-    next_client = conn.execute("""
-        SELECT * FROM queue_tickets 
-        WHERE salon_id = ? 
-          AND status IN ('waiting', 'turn_notified', 'on_the_way', 'traffic_grace', 'arrived')
-          AND (preferred_chair_id = 0 OR preferred_chair_id = ? OR preferred_chair_id IS NULL)
-        ORDER BY joined_at ASC LIMIT 1
-    """, (salon_id, chair_num)).fetchone()
+    # 2. Pick target waiting client
+    next_client = None
+    if ticket_id:
+        next_client = conn.execute("""
+            SELECT * FROM queue_tickets 
+            WHERE id = ? AND salon_id = ? 
+              AND status IN ('waiting', 'turn_notified', 'on_the_way', 'traffic_grace', 'arrived')
+        """, (ticket_id, salon_id)).fetchone()
 
-    next_id = None
-    if next_client:
-        next_id = next_client["id"]
-        conn.execute("UPDATE queue_tickets SET status = 'in_chair', chair_id = ? WHERE id = ?", (chair_num, next_id))
-        conn.execute("UPDATE salon_chairs SET current_ticket_id = ? WHERE id = ?", (next_id, chair_id))
-        if chair_num == 1:
-            conn.execute("UPDATE salons SET current_in_chair_id = ? WHERE id = ?", (next_id, salon_id))
-    else:
-        conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair_id,))
-        if chair_num == 1:
-            conn.execute("UPDATE salons SET current_in_chair_id = NULL WHERE id = ?", (salon_id,))
+    if not next_client:
+        # Respect preferred barber/chair if chosen
+        next_client = conn.execute("""
+            SELECT * FROM queue_tickets 
+            WHERE salon_id = ? 
+              AND status IN ('waiting', 'turn_notified', 'on_the_way', 'traffic_grace', 'arrived')
+              AND (preferred_chair_id = 0 OR preferred_chair_id = ? OR preferred_chair_id IS NULL)
+            ORDER BY joined_at ASC LIMIT 1
+        """, (salon_id, chair_num)).fetchone()
+
+    if not next_client:
+        # Fallback to any waiting client in this salon
+        next_client = conn.execute("""
+            SELECT * FROM queue_tickets 
+            WHERE salon_id = ? 
+              AND status IN ('waiting', 'turn_notified', 'on_the_way', 'traffic_grace', 'arrived')
+            ORDER BY joined_at ASC LIMIT 1
+        """, (salon_id,)).fetchone()
+
+    if not next_client:
+        conn.close()
+        return jsonify({"error": "لا يوجد زبائن في قائمة الانتظار لإدخالهم للكرسي حالياً"}), 400
+
+    next_id = next_client["id"]
+    duration = int(next_client["total_duration"] or 25)
+    now_dt = datetime.now()
+    started_at_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    est_end_str = (now_dt + timedelta(minutes=duration)).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn.execute("""
+        UPDATE queue_tickets 
+        SET status = 'in_chair', 
+            chair_id = ?, 
+            started_at = ?, 
+            estimated_end_time = ? 
+        WHERE id = ?
+    """, (chair_num, started_at_str, est_end_str, next_id))
+
+    conn.execute("UPDATE salon_chairs SET current_ticket_id = ? WHERE id = ?", (next_id, chair_id))
+    if chair_num == 1:
+        conn.execute("UPDATE salons SET current_in_chair_id = ? WHERE id = ?", (next_id, salon_id))
 
     conn.commit()
     conn.close()
 
     broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": chair_id, "ticket_id": next_id})
     broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "call_next", "chair_id": chair_id, "ticket_id": next_id})
-    if next_id:
-        broadcaster.broadcast("turn_alert", {"salon_id": salon_id, "ticket_id": next_id, "chair_number": chair_num, "barber_name": chair["barber_name"]})
+    broadcaster.broadcast("turn_alert", {"salon_id": salon_id, "ticket_id": next_id, "chair_number": chair_num, "barber_name": chair["barber_name"]})
 
-    return jsonify({"success": True, "in_chair_id": next_id, "chair_number": chair_num})
+    return jsonify({
+        "success": True, 
+        "in_chair_id": next_id, 
+        "chair_number": chair_num,
+        "customer_name": next_client["customer_name"],
+        "started_at": started_at_str,
+        "estimated_end_time": est_end_str,
+        "total_duration": duration
+    })
+
+
+@app.route("/api/barber/chairs/cancel-session", methods=["POST"])
+def chair_cancel_session():
+    data = request.json or {}
+    salon_id = data.get("salon_id", "salon_dz_1")
+    chair_id = data.get("chair_id")
+
+    conn = get_db_connection()
+    chair = conn.execute("SELECT * FROM salon_chairs WHERE id = ?", (chair_id,)).fetchone()
+    if not chair:
+        conn.close()
+        return jsonify({"error": "الكرسي غير موجود"}), 404
+
+    ticket_id = chair["current_ticket_id"]
+    if ticket_id:
+        conn.execute("UPDATE queue_tickets SET status = 'cancelled' WHERE id = ?", (ticket_id,))
+
+    conn.execute("UPDATE salon_chairs SET current_ticket_id = NULL WHERE id = ?", (chair_id,))
+    if chair["chair_number"] == 1:
+        conn.execute("UPDATE salons SET current_in_chair_id = NULL WHERE id = ?", (salon_id,))
+
+    conn.commit()
+    conn.close()
+
+    broadcaster.broadcast("chairs_updated", {"salon_id": salon_id, "action": "cancel_session", "chair_id": chair_id})
+    broadcaster.broadcast("queue_updated", {"salon_id": salon_id, "action": "cancel_session", "chair_id": chair_id})
+    return jsonify({"success": True, "message": "تم إلغاء الجلسة وإخلاء الكرسي"})
 
 
 @app.route("/api/barber/chairs/complete", methods=["POST"])
